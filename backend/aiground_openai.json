@@ -1,0 +1,200 @@
+{
+    "id": "/subscriptions/fcb5bfd4-f124-4f19-bee4-35dcb7e98442/resourceGroups/linux_server/providers/Microsoft.CognitiveServices/accounts/aiground-openai",
+    "name": "aiground-openai",
+    "type": "Microsoft.CognitiveServices/accounts",
+    "etag": "\"1200bb90-0000-2500-0000-67a4d3580000\"",
+    "location": "koreacentral",
+    "sku": {
+        "name": "S0"
+    },
+    "kind": "OpenAI",
+    "tags": {},
+    "properties": {
+        "endpoint": "https://aiground-openai.openai.azure.com/",
+        "internalId": "f24f599dee4447589d1a15ec4a41cf12",
+        "dateCreated": "2025-02-06T15:20:46.1508375Z",
+        "apiProperties": {},
+        "callRateLimit": {
+            "rules": [
+                {
+                    "key": "openai.dalle.post",
+                    "renewalPeriod": 1,
+                    "count": 30,
+                    "matchPatterns": [
+                        {
+                            "path": "dalle/*",
+                            "method": "POST"
+                        },
+                        {
+                            "path": "openai/images/*",
+                            "method": "POST"
+                        }
+                    ]
+                },
+                {
+                    "key": "openai.dalle.other",
+                    "renewalPeriod": 1,
+                    "count": 30,
+                    "matchPatterns": [
+                        {
+                            "path": "dalle/*",
+                            "method": "*"
+                        },
+                        {
+                            "path": "openai/operations/images/*",
+                            "method": "*"
+                        }
+                    ]
+                },
+                {
+                    "key": "openai.assistants.default",
+                    "renewalPeriod": 1,
+                    "count": 100,
+                    "matchPatterns": [
+                        {
+                            "path": "openai/assistants/*",
+                            "method": "*"
+                        },
+                        {
+                            "path": "openai/threads/*",
+                            "method": "*"
+                        },
+                        {
+                            "path": "openai/vector_stores/*",
+                            "method": "*"
+                        }
+                    ]
+                },
+                {
+                    "key": "openai.batches.post",
+                    "renewalPeriod": 60,
+                    "count": 30,
+                    "matchPatterns": [
+                        {
+                            "path": "openai/batches/*",
+                            "method": "POST"
+                        }
+                    ]
+                },
+                {
+                    "key": "openai.batches.get",
+                    "renewalPeriod": 60,
+                    "count": 500,
+                    "matchPatterns": [
+                        {
+                            "path": "openai/batches/*",
+                            "method": "GET"
+                        }
+                    ]
+                },
+                {
+                    "key": "openai.batches.list",
+                    "renewalPeriod": 60,
+                    "count": 100,
+                    "matchPatterns": [
+                        {
+                            "path": "openai/batches",
+                            "method": "GET"
+                        }
+                    ]
+                },
+                {
+                    "key": "openai",
+                    "renewalPeriod": 1,
+                    "count": 30,
+                    "matchPatterns": [
+                        {
+                            "path": "openai/*",
+                            "method": "*"
+                        }
+                    ]
+                },
+                {
+                    "key": "default",
+                    "renewalPeriod": 1,
+                    "count": 30,
+                    "matchPatterns": [
+                        {
+                            "path": "*",
+                            "method": "*"
+                        }
+                    ]
+                }
+            ]
+        },
+        "isMigrated": false,
+        "customSubDomainName": "aiground-openai",
+        "networkAcls": {
+            "defaultAction": "Allow",
+            "virtualNetworkRules": [],
+            "ipRules": []
+        },
+        "privateEndpointConnections": [],
+        "publicNetworkAccess": "Enabled",
+        "capabilities": [
+            {
+                "name": "VirtualNetworks"
+            },
+            {
+                "name": "CustomerManagedKey"
+            },
+            {
+                "name": "MaxFineTuneCount",
+                "value": "100"
+            },
+            {
+                "name": "MaxRunningFineTuneCount",
+                "value": "3"
+            },
+            {
+                "name": "MaxUserFileCount",
+                "value": "50"
+            },
+            {
+                "name": "MaxTrainingFileSize",
+                "value": "512000000"
+            },
+            {
+                "name": "MaxUserFileImportDurationInHours",
+                "value": "1"
+            },
+            {
+                "name": "MaxFineTuneJobDurationInHours",
+                "value": "720"
+            },
+            {
+                "name": "MaxEvaluationRunDurationInHours",
+                "value": "5"
+            },
+            {
+                "name": "MaxRunningEvaluationCount",
+                "value": "5"
+            },
+            {
+                "name": "TrustedServices",
+                "value": "Microsoft.CognitiveServices,Microsoft.MachineLearningServices,Microsoft.Search,Microsoft.VideoIndexer"
+            },
+            {
+                "name": "RaiMonitor"
+            }
+        ],
+        "endpoints": {
+            "OpenAI Language Model Instance API": "https://aiground-openai.openai.azure.com/",
+            "OpenAI Dall-E API": "https://aiground-openai.openai.azure.com/",
+            "OpenAI Whisper API": "https://aiground-openai.openai.azure.com/",
+            "OpenAI Model Scaleset API": "https://aiground-openai.openai.azure.com/",
+            "OpenAI Realtime API": "https://aiground-openai.openai.azure.com/",
+            "Token Service API": "https://aiground-openai.openai.azure.com/"
+        },
+        "provisioningState": "Succeeded"
+    },
+    "systemData": {
+        "createdBy": "sanghern.song@gmail.com",
+        "createdByType": "User",
+        "createdAt": "2025-02-06T15:20:45.2447179Z",
+        "lastModifiedBy": "sanghern.song@gmail.com",
+        "lastModifiedByType": "User",
+        "lastModifiedAt": "2025-02-06T15:20:45.2447179Z"
+    },
+    "apiVersion": "2021-04-30"
+}

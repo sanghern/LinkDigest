@@ -1,0 +1,13 @@
+# LinkDigest Frontend - Docker Compose (독립 실행)
+# 사용법: frontend 디렉터리에서 docker compose up -d / docker compose down
+# 매뉴얼: DOCKER_DEPLOY.md 참고
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linkdigest-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"

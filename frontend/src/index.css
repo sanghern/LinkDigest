@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.markdown-body {
+  @apply text-gray-700;
+}
+
+.markdown-body h1 {
+  @apply text-2xl font-bold mb-4 mt-6;
+}
+
+.markdown-body h2 {
+  @apply text-xl font-bold mb-3 mt-5;
+}
+
+.markdown-body h3 {
+  @apply text-lg font-bold mb-2 mt-4;
+}
+
+.markdown-body p {
+  @apply mb-4;
+}
+
+.markdown-body ul {
+  @apply list-disc pl-5 mb-4;
+}
+
+.markdown-body ol {
+  @apply list-decimal pl-5 mb-4;
+}
+
+.markdown-body blockquote {
+  @apply border-l-4 border-gray-200 pl-4 italic my-4;
+}
+
+/* 인라인 코드 스타일 - 밝은 배경 유지 */
+.markdown-body code:not(pre code) {
+  @apply bg-gray-100 text-gray-900 px-1 rounded font-mono;
+}
+
+/* 코드 블록 스타일 - 다크 배경 + 밝은 텍스트로 가독성 향상 */
+.markdown-body pre {
+  @apply bg-gray-900 text-gray-100 p-4 rounded-lg mb-4 overflow-x-auto border border-gray-700;
+  /* 모바일에서 터치 스크롤 최적화 */
+  -webkit-overflow-scrolling: touch;
+  white-space: pre;
+}
+
+/* 코드 블록 내부의 코드 요소 스타일 */
+.markdown-body pre code {
+  @apply bg-transparent text-gray-100 p-0 font-mono;
+  color: inherit;
+  white-space: pre;
+} 

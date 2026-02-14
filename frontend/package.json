@@ -1,0 +1,60 @@
+{
+  "name": "bookmark-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.6.7",
+    "date-fns": "^2.30.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.0.3",
+    "react-router-dom": "^6.22.1",
+    "react-scripts": "5.0.1",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.0",
+    "web-vitals": "^2.1.4"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17"
+  },
+  "scripts": {
+    "start": "NODE_OPTIONS=--no-deprecation react-scripts start",
+    "start:remote": "PORT=3000 HOST=100.89.194.30 react-scripts start",
+    "start:192.168.7.88": "PORT=3000 HOST=192.168.7.88 react-scripts start",
+    "start:digest": "PORT=3000 HOST=192.168.7.88 react-scripts start",
+    "start:docker": "REACT_APP_API_URL=http://localhost:8000/api PORT=3000 HOST=localhost react-scripts start",
+    "verify-backend": "node scripts/verify-backend.js",
+    "verify-backend:nginx": "node scripts/verify-backend.js http://localhost:8080/api",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "proxy": "http://localhost:8000",
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
