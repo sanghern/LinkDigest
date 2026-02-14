@@ -13,6 +13,10 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    # 컨테이너 안에서는 localhost=컨테이너 자신이므로, 호스트의 Ollama에 접속하려면 아래 주소 사용.
+    # (environment가 env_file보다 우선하므로 Docker 실행 시 항상 호스트 Ollama로 연결됨.)
+    environment:
+      - OLLAMA_API_URL=http://host.docker.internal:11434/api/chat
     # DB는 .env의 DB_HOST/DB_PORT 사용 (외부 Postgres 192.168.7.89 등). Compose 내부 DB 사용 시 .env에 DB_HOST=postgres 로 두고 --profile internal-db 로 기동
     networks:
       - linkdigest-net

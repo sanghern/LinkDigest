@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Navigation from './components/Navigation';
 import Login from './components/Login';
@@ -43,6 +43,8 @@ function App() {
                                     <LogViewer />
                                 </ProtectedRoute>
                             } />
+                            {/* 알 수 없는 경로는 로그인으로 */}
+                            <Route path="*" element={<Navigate to="/login" replace />} />
                         </Routes>
                     </div>
                 </Router>

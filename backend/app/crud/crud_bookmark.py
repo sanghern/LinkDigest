@@ -88,6 +88,29 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             .filter(Bookmark.user_id == owner_id)\
             .count()
 
+    def get_by_owner_and_url(
+        self, db: Session, *, owner_id, url: str
+    ) -> Optional[Bookmark]:
+        """동일 사용자가 동일 URL로 저장한 북마크가 있으면 반환, 없으면 None."""
+        url_normalized = url.strip() if url else ""
+        if not url_normalized:
+            return None
+        return db.query(self.model).filter(
+            Bookmark.user_id == owner_id,
+            Bookmark.url == url_normalized,
+            Bookmark.is_deleted == False,
+        ).first()
+
+    def get_by_url(self, db: Session, *, url: str) -> Optional[Bookmark]:
+        """어떤 사용자든 동일 URL로 저장한 북마크가 있으면 반환, 없으면 None (전체 중복 검사)."""
+        url_normalized = url.strip() if url else ""
+        if not url_normalized:
+            return None
+        return db.query(self.model).filter(
+            Bookmark.url == url_normalized,
+            Bookmark.is_deleted == False,
+        ).first()
+
     def get_multi_by_owner_with_tag(
         self, db: Session, *, owner_id: int, tag: str, skip: int = 0, limit: int = 100
     ) -> List[Bookmark]:
@@ -216,7 +239,7 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             # OR 조건으로 결합
             if or_conditions:
                 query = query.filter(or_(*or_conditions))
-                logger.info(f"[태그 검색 - Count] OR 조건 개수: {len(or_conditions)}")
+                #logger.info(f"[태그 검색 - Count] OR 조건 개수: {len(or_conditions)}")
         
         # 생성된 SQL 확인을 위한 로깅 (INFO 레벨로 변경하여 확실히 기록)
         try:
@@ -224,12 +247,12 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             compiled = query.statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": False})
             sql_str = str(compiled)
             params = compiled.params
-            logger.info(f"[태그 검색 - Count] 생성된 SQL: {sql_str}")
-            logger.info(f"[태그 검색 - Count] SQL 파라미터: {params}")
+            #logger.info(f"[태그 검색 - Count] 생성된 SQL: {sql_str}")
+            #logger.info(f"[태그 검색 - Count] SQL 파라미터: {params}")
         except Exception as e:
-            logger.warning(f"[태그 검색 - Count] SQL 로깅 실패: {e}")
+            #logger.warning(f"[태그 검색 - Count] SQL 로깅 실패: {e}")
             import traceback
-            logger.warning(f"[태그 검색 - Count] SQL 로깅 실패 상세: {traceback.format_exc()}")
+            #logger.warning(f"[태그 검색 - Count] SQL 로깅 실패 상세: {traceback.format_exc()}")
         
         return query.count()
 
@@ -252,7 +275,7 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
         # 각 태그에 대해 AND 조건으로 필터링
         tag_and_conditions = []
         
-        logger.info(f"[다중 태그 검색] 입력 태그: {tags}")
+        #logger.info(f"[다중 태그 검색] 입력 태그: {tags}")
         
         for idx, tag in enumerate(tags):
             if not tag or not tag.strip():
@@ -266,7 +289,7 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             if not words:
                 continue
             
-            logger.info(f"[다중 태그 검색] 태그[{idx}]: '{keyword}', 분리된 단어: {words}")
+            #logger.info(f"[다중 태그 검색] 태그[{idx}]: '{keyword}', 분리된 단어: {words}")
             
             # 분리된 단어가 하나면 기존처럼 단일 패턴으로 검색
             # 여러 개면 OR 조건으로 검색한 후, 전체를 AND 조건에 추가

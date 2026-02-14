@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import api from '../utils/api';
 
-const AddBookmark = ({ onClose, onAdd }) => {
+const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
     const [formData, setFormData] = useState({
         url: '',          // 필수 입력
         title: '',        // 선택 입력
@@ -9,11 +9,13 @@ const AddBookmark = ({ onClose, onAdd }) => {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [duplicateError, setDuplicateError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setDuplicateError('');
 
         try {
             // URL이 비어있는지 확인
@@ -35,7 +37,17 @@ const AddBookmark = ({ onClose, onAdd }) => {
             onAdd(response);
             onClose();
         } catch (err) {
-            setError(err.message || '북마크 추가에 실패했습니다.');
+            if (err.response?.status === 409) {
+                const message = err.response?.data?.detail || '이미 동일한 URL이 저장되어 있습니다.';
+                if (onDuplicateError) {
+                    onDuplicateError(message);
+                    onClose();
+                } else {
+                    setDuplicateError(message);
+                }
+            } else {
+                setError(err.message || '북마크 추가에 실패했습니다.');
+            }
         } finally {
             setLoading(false);
         }
@@ -66,6 +78,25 @@ const AddBookmark = ({ onClose, onAdd }) => {
                     {error && (
                         <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
                             {error}
+                        </div>
+                    )}
+
+                    {/* URL 중복 오류 팝업 */}
+                    {duplicateError && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 border border-gray-200">
+                                <h3 className="text-lg font-semibold text-gray-800 mb-2">URL 중복</h3>
+                                <p className="text-gray-700 mb-4">{duplicateError}</p>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setDuplicateError('')}
+                                        className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700"
+                                    >
+                                        확인
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 

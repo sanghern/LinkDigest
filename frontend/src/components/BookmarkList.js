@@ -20,6 +20,8 @@ const BookmarkList = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showDuplicateErrorModal, setShowDuplicateErrorModal] = useState(false);
+    const [duplicateErrorMessage, setDuplicateErrorMessage] = useState('');
     const [selectedBookmark, setSelectedBookmark] = useState(null);
     const [showDetail, setShowDetail] = useState(false);
     const [showEdit, setShowEdit] = useState(false);
@@ -497,7 +499,52 @@ const BookmarkList = () => {
                 <AddBookmark
                     onClose={() => setShowAddModal(false)}
                     onAdd={handleAdd}
+                    onDuplicateError={(message) => {
+                        setShowAddModal(false);
+                        setDuplicateErrorMessage(message);
+                        setShowDuplicateErrorModal(true);
+                    }}
                 />
+            )}
+            {/* 중복 오류 UI: 북마크 추가 UI와 동일한 위치에 표시 */}
+            {showDuplicateErrorModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 pt-8 sm:pt-12 lg:pt-16 z-50 overflow-y-auto">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col mt-4 sm:mt-8">
+                        <div className="flex-none px-6 py-4 border-b border-gray-200">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-semibold text-gray-800">오류</h2>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDuplicateErrorModal(false)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeJoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="flex items-start">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <p className="ml-3 text-gray-700">{duplicateErrorMessage}</p>
+                            </div>
+                        </div>
+                        <div className="flex-none px-6 py-4 border-t border-gray-200 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShowDuplicateErrorModal(false)}
+                                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700"
+                            >
+                                확인
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
             {showEdit && selectedBookmark && (
                 <EditBookmark

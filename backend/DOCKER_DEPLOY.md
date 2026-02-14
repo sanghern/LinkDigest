@@ -245,8 +245,9 @@ docker compose logs backend
 ### 9.3 Ollama 연결 (AI 요약)
 
 - Ollama를 **맥 호스트**에서 실행 중이어야 합니다.
-- `.env`에 `OLLAMA_API_URL=http://host.docker.internal:11434/api/chat` 설정 (맥에서는 `host.docker.internal` 사용).
-- 리눅스에서는 `host.docker.internal`이 없을 수 있으므로, 호스트 IP로 바꾸거나 `extra_hosts`로 호스트명을 지정해 사용하세요.
+- **docker-compose.yml**에서 백엔드 서비스에 `OLLAMA_API_URL=http://host.docker.internal:11434/api/chat` 가 기본으로 설정되어 있어, **별도 .env 설정 없이** Docker 실행 시 호스트의 Ollama로 연결됩니다. (컨테이너 안의 `localhost`는 호스트가 아니므로, 이 주소가 필요합니다.)
+- 리눅스에서는 `host.docker.internal`이 없을 수 있으므로, `docker-compose.yml`의 해당 값을 호스트 IP로 바꾸거나 `extra_hosts`로 호스트명을 지정해 사용하세요.
+- 상세 원인 분석: 프로젝트 루트 `docs/원인분석_Docker_요약미동작.md` 참고.
 
 ---
 

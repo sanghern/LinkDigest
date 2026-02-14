@@ -5,6 +5,7 @@ from ..models.bookmark import Bookmark
 from ..services.scraping_service import generate_summary
 import logging
 import re
+import uuid as uuid_module
 from html import unescape
 
 logger = logging.getLogger(__name__)
@@ -86,43 +87,52 @@ def extract_category_keywords(text):
 
 def update_bookmark_summary(bookmark_id: str, content: str):
     """쓰레드에서 북마크 요약을 생성하고 업데이트하는 함수"""
+    db = None
     try:
+        # Bookmark.id는 UUID 타입이므로 문자열을 UUID로 변환 (조회 실패 방지)
+        try:
+            bid = uuid_module.UUID(bookmark_id) if isinstance(bookmark_id, str) else bookmark_id
+        except (ValueError, TypeError) as e:
+            logger.error(f"요약 태스크 bookmark_id 변환 실패: bookmark_id={bookmark_id!r}, 오류: {e}")
+            return
+
         # 새로운 DB 세션 생성
         db = SessionLocal()
-        
+
+        # DB에서 북마크 조회 (UUID로 조회)
+        bookmark = db.query(Bookmark).filter(Bookmark.id == bid).first()
+        if not bookmark:
+            logger.warning(f"요약 업데이트할 북마크를 찾을 수 없음: id={bid}")
+            return
+
         # OpenAI 요약 생성
         summary = generate_summary(content)
+
+        # 요약 생성 실패 시 오류 문구를 DB에 저장하지 않음 (기존 '요약 생성 중...' 유지)
+        if not summary or not summary.strip():
+            logger.warning(f"요약 생성 실패 - 북마크 ID: {bid}, summary 컬럼은 갱신하지 않음")
+            return
+
         catergory, keywords = extract_category_keywords(summary)
-        
-        #logger.info(f"요약: {summary}")
         logger.info(f"분류: {catergory}, 키워드: {keywords}")
-        # DB 업데이트
-        bookmark = db.query(Bookmark).filter(Bookmark.id == bookmark_id).first()
-        if bookmark:
-            bookmark.summary = summary
-            bookmark.catergory = catergory
-            # 키워드를 쉼표로 분리하고 공백 제거 및 빈 값 필터링
-            if keywords:
-                keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
-                bookmark.tags = keyword_list
-                #logger.info(f"[태그 저장 검증] 키워드 문자열: '{keywords}'")
-                #logger.info(f"[태그 저장 검증] 변환된 리스트: {keyword_list}")
-                #logger.info(f"[태그 저장 검증] 리스트 타입: {type(keyword_list)}")
-                #logger.info(f"[태그 저장 검증] 리스트 길이: {len(keyword_list)}")
-            else:
-                bookmark.tags = []
-            db.commit()
-            db.refresh(bookmark)  # DB에서 다시 읽어서 실제 저장된 값 확인
-            #logger.info(f"북마크 요약 업데이트 완료 - ID: {bookmark_id}, 태그: {bookmark.tags}")
-            #logger.info(f"[태그 저장 검증] DB에서 읽은 tags 타입: {type(bookmark.tags)}")
-            if bookmark.tags:
-                logger.info(f"[태그 저장 검증] DB에서 읽은 tags 길이: {len(bookmark.tags)}")
-                logger.info(f"[태그 저장 검증] 첫 번째 태그: '{bookmark.tags[0]}' (타입: {type(bookmark.tags[0])})")
-            
+
+        # DB 업데이트 (성공한 경우만)
+        bookmark.summary = summary
+        bookmark.catergory = catergory
+        if keywords:
+            keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
+            bookmark.tags = keyword_list
+        else:
+            bookmark.tags = []
+        db.commit()
+        db.refresh(bookmark)
+        logger.info(f"북마크 요약 업데이트 완료 - ID: {bid}")
     except Exception as e:
         logger.error(f"북마크 요약 업데이트 실패: {str(e)}")
+        logger.exception("상세:")
     finally:
-        db.close()
+        if db:
+            db.close()
 
 def submit_summary_task(bookmark_id: str, content: str):
     """요약 태스크를 쓰레드 풀에 제출"""

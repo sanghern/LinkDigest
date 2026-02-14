@@ -1,11 +1,12 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import logger from '../utils/logger';
 
 const Navigation = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const handleLogout = () => {
         logout();
@@ -13,7 +14,26 @@ const Navigation = () => {
         navigate('/login');
     };
 
-    if (!user) return null;
+    // 로그인 전: 최소 헤더(로고 + 로그인 링크) 표시 → 흰 화면 방지
+    if (!user) {
+        return (
+            <nav className="bg-gray-800 text-white p-4">
+                <div className="container mx-auto flex justify-between items-center">
+                    <Link to="/login" className="text-xl font-bold">
+                        Link_Digest:북마크 요약
+                    </Link>
+                    {location.pathname !== '/login' && (
+                        <Link
+                            to="/login"
+                            className="text-sm font-medium text-blue-300 hover:text-white"
+                        >
+                            로그인
+                        </Link>
+                    )}
+                </div>
+            </nav>
+        );
+    }
 
     return (
         <nav className="bg-gray-800 text-white p-4">

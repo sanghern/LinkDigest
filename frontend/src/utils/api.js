@@ -249,7 +249,8 @@ const api = {
         },
 
         getBookmark: async (id) => {
-            // ...
+            const response = await axiosInstance.get(`/bookmarks/${id}`);
+            return response.data;
         },
 
         increaseReadCount: async (bookmarkId) => {

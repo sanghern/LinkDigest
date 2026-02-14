@@ -42,17 +42,29 @@ async def create_bookmark(
         - 태그 처리
     """
     try:
-        # 디버깅을 위한 로그 추가
-        #logger.info(f"북마크 생성 시작 - URL: {bookmark.url}")
-        
+        url_str = str(bookmark.url).strip()
+        if not url_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="URL을 입력해주세요.",
+            )
+        # 전체 사용자 기준 URL 중복 체크 (409)
+        existing = crud_bookmark.get_by_url(db, url=url_str)
+        if existing:
+            logger.info(f"북마크 URL 중복 - 사용자: {current_user.username}, URL: {url_str}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="이미 동일한 URL이 저장되어 있습니다.",
+            )
+
         # URL 스크래핑
-        scraped_data = scraping_service.scrape(str(bookmark.url))
+        scraped_data = scraping_service.scrape(url_str)
 
         #logger.info(f"스크래핑 결과: {scraped_data}")  # 스크래핑 결과 로깅
         
         # 북마크 데이터 준비
         bookmark_data = bookmark.model_dump()
-        bookmark_data['url'] = str(bookmark_data['url'])
+        bookmark_data['url'] = url_str
         
         # 제목이 없으면 스크래핑한 제목 사용
         if not bookmark_data.get('title'):
@@ -84,6 +96,8 @@ async def create_bookmark(
         logger.info(f"북마크 생성 완료 - ID: {db_bookmark.id}")
         return db_bookmark
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"북마크 생성 실패: {str(e)}")
         logger.exception("상세 에러:")  # 스택 트레이스 로깅
