@@ -25,3 +25,5 @@ cd frontend && docker compose up -d
 
 - 프론트: http://localhost:3000  
 - 백엔드 API: http://localhost:8000  
+
+2026.02.14 by shsong
