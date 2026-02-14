@@ -9,9 +9,12 @@ const Navigation = () => {
     const location = useLocation();
 
     const handleLogout = () => {
-        logout();
-        logger.info('로그아웃 성공');
-        navigate('/login');
+        logout().then(() => {
+            try { logger.info('로그아웃 성공'); } catch (e) { /* 로그 실패해도 무시 */ }
+            navigate('/login');
+        }).catch(() => {
+            navigate('/login');
+        });
     };
 
     // 로그인 전: 최소 헤더(로고 + 로그인 링크) 표시 → 흰 화면 방지

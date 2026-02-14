@@ -22,16 +22,22 @@
     </div>
     <script>
       window.__REACT_LOADED__ = false;
+      function escapeHtml(s) {
+        if (s == null) return '';
+        var t = String(s);
+        return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function showError(msg) {
+        var el = document.getElementById('root-fallback');
+        if (el) el.innerHTML = '<p style="color:#c00;margin:0;">오류: ' + escapeHtml(msg) + '</p><p style="font-size:0.85rem;color:#666;margin-top:0.5rem;">페이지를 새로고침하거나 네트워크를 확인해 주세요.</p>';
+      }
       window.addEventListener('error', function(e) {
-        if (!window.__REACT_LOADED__) {
-          var el = document.getElementById('root-fallback');
-          if (el) { el.innerHTML = '<p style="color:#c00;margin:0;">오류: ' + (e.message || e.reason || '앱 로드 실패') + '</p><p style="font-size:0.85rem;color:#666;margin-top:0.5rem;">페이지를 새로고침하거나 네트워크를 확인해 주세요.</p>'; }
-        }
+        if (!window.__REACT_LOADED__) showError(e.message || e.reason || '앱 로드 실패');
       });
       window.addEventListener('unhandledrejection', function(e) {
         if (!window.__REACT_LOADED__) {
-          var el = document.getElementById('root-fallback');
-          if (el) { el.innerHTML = '<p style="color:#c00;margin:0;">오류: ' + (e.reason && (e.reason.message || e.reason)) + '</p><p style="font-size:0.85rem;color:#666;margin-top:0.5rem;">페이지를 새로고침해 주세요.</p>'; }
+          var msg = e.reason && (e.reason && e.reason.message ? e.reason.message : (typeof e.reason === 'string' ? e.reason : String(e.reason)));
+          showError(msg || '앱 로드 실패');
         }
       });
     </script>
