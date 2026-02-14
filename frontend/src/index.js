@@ -10,5 +10,8 @@ root.render(
         <App />
     </React.StrictMode>
 );
+if (typeof window !== 'undefined') {
+  requestAnimationFrame(function () { window.__REACT_LOADED__ = true; });
+}
 
 reportWebVitals(); 

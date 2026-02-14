@@ -15,6 +15,25 @@
   </head>
   <body>
     <noscript>이 앱을 실행하려면 JavaScript를 활성화해야 합니다.</noscript>
-    <div id="root"></div>
+    <div id="root">
+      <div style="padding:2rem;text-align:center;min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;font-family:sans-serif;background:#f5f5f5;" id="root-fallback">
+        <p style="margin:0;color:#333;">로딩 중...</p>
+      </div>
+    </div>
+    <script>
+      window.__REACT_LOADED__ = false;
+      window.addEventListener('error', function(e) {
+        if (!window.__REACT_LOADED__) {
+          var el = document.getElementById('root-fallback');
+          if (el) { el.innerHTML = '<p style="color:#c00;margin:0;">오류: ' + (e.message || e.reason || '앱 로드 실패') + '</p><p style="font-size:0.85rem;color:#666;margin-top:0.5rem;">페이지를 새로고침하거나 네트워크를 확인해 주세요.</p>'; }
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        if (!window.__REACT_LOADED__) {
+          var el = document.getElementById('root-fallback');
+          if (el) { el.innerHTML = '<p style="color:#c00;margin:0;">오류: ' + (e.reason && (e.reason.message || e.reason)) + '</p><p style="font-size:0.85rem;color:#666;margin-top:0.5rem;">페이지를 새로고침해 주세요.</p>'; }
+        }
+      });
+    </script>
   </body>
 </html> 

@@ -38,7 +38,7 @@ const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
             onClose();
         } catch (err) {
             if (err.response?.status === 409) {
-                const message = err.response?.data?.detail || '이미 동일한 URL이 저장되어 있습니다.';
+                const message = '이미 동일한 URL이 저장되어 있습니다.';
                 if (onDuplicateError) {
                     onDuplicateError(message);
                     onClose();
