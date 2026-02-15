@@ -81,8 +81,10 @@ async def create_bookmark(
             'summary': '요약 생성 중...',  # 임시 메시지
             'user_id': current_user.id
         })
-        
-        #logger.info(f"최종 북마크 데이터: {bookmark_data}")  # 최종 데이터 로깅
+        # 요약 모델은 DB 컬럼이 아니므로 저장 전 제거
+        summary_model = bookmark_data.pop("summary_model", None) or settings.OLLAMA_MODEL
+        if summary_model not in settings.OLLAMA_SUMMARY_MODEL_LIST:
+            summary_model = settings.OLLAMA_MODEL
         
         # 북마크 생성
         db_bookmark = Bookmark(**bookmark_data)
@@ -90,11 +92,8 @@ async def create_bookmark(
         db.commit()
         db.refresh(db_bookmark)
         
-        # 비동기 요약 태스크 실행
-        submit_summary_task(
-            str(db_bookmark.id), 
-            scraped_data['content']
-        )
+        # 비동기 요약 태스크 실행 (선택된 모델 또는 기본 모델 사용)
+        submit_summary_task(str(db_bookmark.id), scraped_data["content"], model=summary_model)
         
         logger.info(f"북마크 생성 완료 - ID: {db_bookmark.id}")
         return db_bookmark
@@ -182,6 +181,13 @@ def get_bookmarks(
         "per_page": per_page,
         "total_pages": (total + per_page - 1) // per_page
     }
+
+
+@router.get("/summary-models")
+def get_summary_models(current_user: User = Depends(get_current_user)):
+    """요약에 사용 가능한 모델 목록 반환 (OLLAMA_MODEL_LISTS 기반)."""
+    return {"models": settings.OLLAMA_SUMMARY_MODEL_LIST}
+
 
 @router.get("/{bookmark_id}", response_model=BookmarkResponse)
 def read_bookmark(

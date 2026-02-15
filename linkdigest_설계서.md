@@ -71,9 +71,12 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 
 #### 북마크 생성 플로우
 ```
-사용자 URL 입력
+사용자: 요약 모델 선택(선택), URL 입력
     ↓
-Frontend → POST /api/bookmarks/
+Frontend: GET /api/bookmarks/summary-models → 모델 목록 표시
+Frontend → POST /api/bookmarks/ (url, title, tags, summary_model 선택)
+    ↓
+Backend: URL 중복 체크 (DUPLICATE_URL_CHECK_ENABLED=True일 때)
     ↓
 Backend: ScrapingService.scrape()
     ↓
@@ -83,9 +86,9 @@ Backend: ScrapingService.scrape()
     ↓
 북마크 DB 저장
     ↓
-비동기 요약 태스크 시작 (ThreadPoolExecutor)
+비동기 요약 태스크 시작 (ThreadPoolExecutor, 선택된 모델 또는 OLLAMA_MODEL)
     ↓
-Ollama 요약 API 호출
+Ollama 요약 API 호출 (prompt.conf 기반 프롬프트)
     ↓
 요약, 키워드, 분류 추출
     ↓
@@ -151,7 +154,8 @@ Frontend: 북마크 목록 렌더링
 | 카테고리 | 기술 | 모델 | 용도 |
 |---------|------|------|------|
 | **LLM 서버** | Ollama | - | 로컬 LLM 서버 |
-| **요약 모델** | Ollama | gpt-oss:120b-cloud | 콘텐츠 요약 생성 |
+| **요약 모델(기본)** | Ollama | OLLAMA_MODEL (예: gpt-oss:120b-cloud) | 콘텐츠 요약 생성 |
+| **요약 선택 모델 목록** | Ollama | OLLAMA_MODEL_LISTS (쉼표 구분) | 북마크 추가 시 선택 가능 모델 |
 | **번역 모델** | Ollama | translategemma:4b | 제목 번역 |
 
 ### 3.4 인프라 및 도구
@@ -350,11 +354,12 @@ Frontend: 북마크 목록 렌더링
 │   └── GET  /me             # 현재 사용자 정보
 │
 ├── /bookmarks
-│   ├── GET    /             # 북마크 목록 조회 (페이지네이션, 필터링)
-│   ├── POST   /             # 북마크 생성
-│   ├── GET    /{id}         # 북마크 상세 조회
-│   ├── PUT    /{id}         # 북마크 수정
-│   ├── DELETE /{id}         # 북마크 삭제
+│   ├── GET    /                 # 북마크 목록 조회 (페이지네이션, 필터링)
+│   ├── GET    /summary-models   # 요약용 모델 목록 (OLLAMA_MODEL_LISTS 기반)
+│   ├── POST   /                 # 북마크 생성 (body: url, title, tags, summary_model 선택)
+│   ├── GET    /{id}             # 북마크 상세 조회
+│   ├── PUT    /{id}             # 북마크 수정
+│   ├── DELETE /{id}             # 북마크 삭제
 │   └── POST   /{id}/increase-read-count  # 조회수 증가
 │
 └── /logs
@@ -698,7 +703,12 @@ OPENAI_API_KEY=
 # Ollama 설정
 OLLAMA_API_URL=http://localhost:11434/api/chat
 OLLAMA_MODEL=gpt-oss:120b-cloud
+# 요약용 선택 가능 모델 (쉼표 구분, 북마크 추가 시 프론트에서 선택)
+OLLAMA_MODEL_LISTS=gpt-oss:120b-cloud, emma3:27b-cloud
 TRANSLATE_MODEL=translategemma:4b
+
+# URL 중복 등록 체크 (True: 중복 시 409 반환, False: 체크 생략)
+DUPLICATE_URL_CHECK_ENABLED=True
 
 # 초기 관리자 계정 설정 (db_init.py에서 사용)
 ADMIN_USERNAME=admin
@@ -755,6 +765,8 @@ REACT_APP_DEBUG=true
 ### 11.2 AI 요약 기능
 
 - **요약 생성**: Ollama API를 통한 비동기 요약 생성. 완료 목표 **30초 이내**, ThreadPoolExecutor **최대 3개 워커**.
+- **요약 모델 선택**: 북마크 추가 시 사용자가 요약에 사용할 모델 선택 가능. `OLLAMA_MODEL_LISTS`(쉼표 구분)로 선택 가능 모델 정의, `GET /api/bookmarks/summary-models`로 목록 제공. 미선택 시 `OLLAMA_MODEL` 사용.
+- **프롬프트 설정**: 요약용 시스템/유저 프롬프트는 `app/utils/prompt.conf`(JSON)에서 정의. `system`, `user_template` 배열 형식으로 가독성 유지.
 - **키워드 추출**: 자동 키워드 추출 및 태그 생성
 - **분류**: 콘텐츠 분류 자동 생성
 - **형식**: 마크다운 형식으로 요약 생성. 요약 생성 중에는 "요약 생성 중..." 메시지 표시.
@@ -810,6 +822,11 @@ REACT_APP_DEBUG=true
 ---
 
 ## 최근 업데이트
+
+### 요약 모델 선택 및 설정 기능
+- **요약 모델 선택**: `OLLAMA_MODEL_LISTS` 환경 변수(쉼표 구분), `GET /api/bookmarks/summary-models`, `POST /api/bookmarks/` body의 `summary_model`(선택). 프론트 북마크 추가 UI에 모델 드롭다운 연동.
+- **URL 중복 체크 on/off**: `DUPLICATE_URL_CHECK_ENABLED=True|False`. True일 때만 동일 URL 409 반환.
+- **요약 프롬프트 외부화**: `backend/app/utils/prompt.conf`(JSON)로 시스템/유저 프롬프트 정의.
 
 ### 2026-02-14: 환경 변수 관리 개선 및 코드 블록 스타일 개선
 

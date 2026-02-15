@@ -208,7 +208,12 @@ OPENAI_API_KEY=
 # Ollama 설정
 OLLAMA_API_URL=http://localhost:11434/api/chat
 OLLAMA_MODEL=gpt-oss:120b-cloud
+# 요약용 선택 가능 모델 (쉼표 구분, 북마크 추가 시 프론트에서 선택)
+OLLAMA_MODEL_LISTS=gpt-oss:120b-cloud, emma3:27b-cloud
 TRANSLATE_MODEL=translategemma:4b
+
+# URL 중복 등록 체크 (True: 중복 시 409 반환, False: 체크 생략)
+DUPLICATE_URL_CHECK_ENABLED=True
 
 # 초기 관리자 계정 설정 (db_init.py에서 사용)
 ADMIN_USERNAME=admin
@@ -347,16 +352,33 @@ Authorization: Bearer {access_token}
 {
   "url": "https://example.com",
   "title": "선택사항",
-  "tags": ["tag1", "tag2"]
+  "tags": ["tag1", "tag2"],
+  "summary_model": "gpt-oss:120b-cloud"
 }
 ```
+- `summary_model`: (선택) 요약에 사용할 Ollama 모델명. 미지정 시 `OLLAMA_MODEL` 사용. `OLLAMA_MODEL_LISTS`에 포함된 값만 유효.
 
 **동작 과정:**
 1. URL에서 콘텐츠 스크래핑
 2. 제목 자동 추출 (없는 경우)
 3. 영어 제목 자동 번역
 4. 북마크 생성
-5. 백그라운드에서 요약 생성 시작
+5. 백그라운드에서 요약 생성 시작 (선택된 모델 또는 기본 모델 사용)
+
+#### GET `/api/bookmarks/summary-models`
+요약에 사용 가능한 모델 목록 반환 (`OLLAMA_MODEL_LISTS` 기반). 북마크 추가 UI에서 모델 선택 시 사용.
+
+**Headers:**
+```
+Authorization: Bearer {access_token}
+```
+
+**Response:**
+```json
+{
+  "models": ["gpt-oss:120b-cloud", "emma3:27b-cloud"]
+}
+```
 
 #### GET `/api/bookmarks/`
 북마크 목록 조회 (페이지네이션)
@@ -425,6 +447,19 @@ Authorization: Bearer {access_token}
 ---
 
 ## 최근 업데이트
+
+### 요약 모델 선택 및 설정 기능
+
+**요약 모델 선택:**
+- **환경 변수**: `.env`에 `OLLAMA_MODEL_LISTS` 추가 (쉼표 구분, 예: `gpt-oss:120b-cloud, emma3:27b-cloud`). 북마크 추가 시 선택 가능한 요약용 모델 목록.
+- **API**: `GET /api/bookmarks/summary-models` — 지원 모델 목록 반환. `POST /api/bookmarks/` 요청 시 `summary_model`(선택)로 사용할 모델 지정. 미지정 시 `OLLAMA_MODEL` 사용.
+- **프론트**: 북마크 추가 UI에 요약 모델 드롭다운 추가, 선택한 모델을 생성 요청에 포함.
+
+**URL 중복 체크 on/off:**
+- **환경 변수**: `DUPLICATE_URL_CHECK_ENABLED=True|False`. `True`(기본): 동일 URL 등록 시 409 반환. `False`: 중복 체크 생략.
+
+**요약 프롬프트 외부 설정:**
+- **파일**: `app/utils/prompt.conf` (JSON). `system`, `user_template`(배열 형식, 줄 단위 가독성)으로 요약용 시스템/유저 프롬프트 정의. `{text}`는 본문 치환용.
 
 ### 2026-02-14: 테스트 구조 개선 및 pytest 통일
 

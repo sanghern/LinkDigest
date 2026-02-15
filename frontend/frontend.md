@@ -289,12 +289,14 @@ const MyComponent = () => {
 - `auth.login()`: 로그인
 - `auth.logout()`: 로그아웃
 - `auth.me()`: 현재 사용자 정보 조회
-- `bookmarks.create()`: 북마크 생성
+- `bookmarks.create()`: 북마크 생성 (선택: `summary_model` 요약 모델 지정)
+- `bookmarks.getSummaryModels()`: 요약에 사용 가능한 모델 목록 조회
 - `bookmarks.getList()`: 북마크 목록 조회
 - `bookmarks.update()`: 북마크 수정
 - `bookmarks.delete()`: 북마크 삭제
 - `bookmarks.getDetail()`: 북마크 상세 조회
 - `bookmarks.increaseReadCount()`: 조회수 증가
+- `bookmarks.share()`: 북마크 공유 (Slack/Notion)
 - `logs.getList()`: 로그 목록 조회
 - `logs.getStats()`: 로그 통계 조회
 - `logs.save()`: 로그 저장
@@ -535,13 +537,14 @@ PORT=3000
 
 ### 1. 북마크 추가 플로우
 
-1. 사용자가 URL 입력
-2. 백엔드로 북마크 생성 요청
-3. 백엔드에서 웹 스크래핑 수행
-4. 제목 자동 추출 및 번역
-5. 북마크 생성 완료
-6. 백그라운드에서 요약 생성 시작
-7. 프론트엔드에서 북마크 목록 업데이트
+1. 북마크 추가 모달에서 **요약 모델** 선택 (드롭다운, `GET /api/bookmarks/summary-models` 연동)
+2. 사용자가 URL 입력 (필수), 제목·키워드(선택)
+3. 백엔드로 북마크 생성 요청 (선택한 `summary_model` 포함)
+4. 백엔드에서 웹 스크래핑 수행
+5. 제목 자동 추출 및 번역
+6. 북마크 생성 완료
+7. 백그라운드에서 요약 생성 시작 (선택된 모델 사용)
+8. 프론트엔드에서 북마크 목록 업데이트
 
 ### 2. 인증 플로우
 

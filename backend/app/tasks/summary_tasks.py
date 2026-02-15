@@ -85,8 +85,8 @@ def extract_category_keywords(text):
     
     return catergory, keywords
 
-def update_bookmark_summary(bookmark_id: str, content: str):
-    """쓰레드에서 북마크 요약을 생성하고 업데이트하는 함수"""
+def update_bookmark_summary(bookmark_id: str, content: str, model: str = None):
+    """쓰레드에서 북마크 요약을 생성하고 업데이트하는 함수 (model 미지정 시 기본 모델 사용)."""
     db = None
     try:
         # Bookmark.id는 UUID 타입이므로 문자열을 UUID로 변환 (조회 실패 방지)
@@ -105,8 +105,8 @@ def update_bookmark_summary(bookmark_id: str, content: str):
             logger.warning(f"요약 업데이트할 북마크를 찾을 수 없음: id={bid}")
             return
 
-        # OpenAI 요약 생성
-        summary = generate_summary(content)
+        # OpenAI 요약 생성 (지정된 모델 또는 기본 모델 사용)
+        summary = generate_summary(content, model=model)
 
         # 요약 생성 실패 시 오류 문구를 DB에 저장하지 않음 (기존 '요약 생성 중...' 유지)
         if not summary or not summary.strip():
@@ -134,6 +134,6 @@ def update_bookmark_summary(bookmark_id: str, content: str):
         if db:
             db.close()
 
-def submit_summary_task(bookmark_id: str, content: str):
-    """요약 태스크를 쓰레드 풀에 제출"""
-    return executor.submit(update_bookmark_summary, bookmark_id, content) 
+def submit_summary_task(bookmark_id: str, content: str, model: str = None):
+    """요약 태스크를 쓰레드 풀에 제출 (model 미지정 시 기본 모델 사용)."""
+    return executor.submit(update_bookmark_summary, bookmark_id, content, model) 

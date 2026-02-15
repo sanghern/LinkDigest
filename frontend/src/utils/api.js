@@ -176,6 +176,11 @@ const api = {
             return response.data;
         },
 
+        getSummaryModels: async () => {
+            const response = await axiosInstance.get('/bookmarks/summary-models');
+            return response.data;
+        },
+
         getList: async ({ page, per_page, tags }) => {
             const params = { page, per_page };
             // 여러 태그를 배열로 전달 (FastAPI Query 파라미터 배열 형식)

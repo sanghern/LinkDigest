@@ -200,10 +200,10 @@ class ScrapingService:
                 'reference_links': []
             }
 
-def generate_summary(text: str) -> str:
-    """텍스트 요약 생성"""
+def generate_summary(text: str, model: str = None) -> str:
+    """텍스트 요약 생성 (model 미지정 시 기본 모델 사용)."""
     try:
-        return summarize_article(text)
+        return summarize_article(text, model=model)
     except Exception as e:
         logger.error(f"요약 생성 실패: {str(e)}")
         return "" 

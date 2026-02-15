@@ -59,6 +59,7 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 - **US-006**: 시스템은 URL에서 자동으로 제목과 콘텐츠를 추출해야 한다.
 - **US-007**: 시스템은 영어 제목을 한글로 자동 번역해야 한다.
 - **US-008**: 시스템은 콘텐츠를 AI로 요약하여 생성해야 한다.
+- **US-008-1**: 사용자는 북마크 추가 시 요약에 사용할 AI 모델을 선택할 수 있어야 한다.
 - **US-009**: 시스템은 요약에서 키워드를 자동 추출하여 태그로 저장해야 한다.
 - **US-010**: 사용자는 북마크 목록을 페이지네이션으로 조회할 수 있어야 한다.
 - **US-011**: 사용자는 북마크를 수정할 수 있어야 한다.
@@ -121,20 +122,20 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 
 #### FR-005: 북마크 생성
 - **우선순위**: 필수 (Must Have)
-- **설명**: 사용자는 URL을 입력하여 북마크를 생성할 수 있어야 한다.
-- **입력**: URL(String, 필수), 제목(String, 선택), 태그(Array[String], 선택)
+- **설명**: 사용자는 URL을 입력하여 북마크를 생성할 수 있어야 한다. 요약에 사용할 AI 모델을 선택할 수 있다.
+- **입력**: URL(String, 필수), 제목(String, 선택), 태그(Array[String], 선택), 요약 모델(String, 선택)
 - **처리**:
-  1. URL 중복 체크 (동일 사용자, 동일 URL)
+  1. URL 중복 체크 (환경 변수 `DUPLICATE_URL_CHECK_ENABLED=True`일 때, 동일 URL이면 409 반환)
   2. 웹 스크래핑 수행 (제목, 콘텐츠 추출)
   3. 제목이 없으면 스크래핑한 제목 사용
   4. 영어 제목 감지 및 번역 (Ollama API)
   5. 북마크 DB 저장
-  6. 비동기 요약 태스크 시작 (ThreadPoolExecutor)
+  6. 비동기 요약 태스크 시작 (ThreadPoolExecutor, 선택된 요약 모델 또는 기본 모델 사용)
 - **출력**: 생성된 북마크 정보 (ID, 제목, URL 등)
 - **에러 처리**: 
   - 잘못된 URL 형식: 400 에러
   - 스크래핑 실패: 500 에러
-  - 중복 URL: 409 에러
+  - 중복 URL: 409 에러 (중복 체크 활성화 시)
 
 #### FR-006: 웹 스크래핑
 - **우선순위**: 필수 (Must Have)
@@ -163,11 +164,11 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 
 #### FR-008: AI 기반 요약 생성
 - **우선순위**: 필수 (Must Have)
-- **설명**: 시스템은 콘텐츠를 AI로 요약하여 생성해야 한다.
+- **설명**: 시스템은 콘텐츠를 AI로 요약하여 생성해야 한다. 사용자는 북마크 추가 시 요약에 사용할 모델을 선택할 수 있다.
 - **처리**:
   - 비동기 백그라운드 처리 (ThreadPoolExecutor, 최대 3개 워커)
-  - Ollama gpt-oss:120b-cloud 모델 사용
-  - 마크다운 형식으로 요약 생성
+  - 요약 모델: 북마크 생성 시 지정된 모델 또는 기본 모델(`OLLAMA_MODEL`) 사용. 선택 가능 모델 목록은 환경 변수 `OLLAMA_MODEL_LISTS`(쉼표 구분)로 정의.
+  - 마크다운 형식으로 요약 생성 (시스템/유저 프롬프트는 `prompt.conf` JSON 파일로 외부 설정 가능)
   - 핵심 요약 5줄 생성
   - 요약 생성 중에는 "요약 생성 중..." 메시지 표시
 - **출력**: 요약 내용 (Text, 마크다운 형식)
@@ -500,7 +501,8 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 
 #### SR-005: 외부 서비스
 - **Ollama 서버**: 로컬 또는 원격 LLM 서버
-  - 요약 모델: gpt-oss:120b-cloud
+  - 기본 요약 모델: `OLLAMA_MODEL` (예: gpt-oss:120b-cloud)
+  - 요약 선택 가능 모델 목록: `OLLAMA_MODEL_LISTS` (쉼표 구분, 예: gpt-oss:120b-cloud, emma3:27b-cloud)
   - 번역 모델: translategemma:4b
 - **웹 서버**: Nginx (프록시 서버)
 
@@ -542,7 +544,7 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 
 #### IR-005: API 엔드포인트
 - **인증**: `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`
-- **북마크**: `/api/bookmarks/` (CRUD)
+- **북마크**: `/api/bookmarks/` (CRUD), `GET /api/bookmarks/summary-models` (요약용 모델 목록)
 - **로그**: `/api/logs/`, `/api/logs/stats`
 
 ### 7.3 외부 API 인터페이스
@@ -915,6 +917,11 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 ---
 
 ## 최근 업데이트
+
+### 요약 모델 선택 및 설정 기능
+- **요약 모델 선택**: 북마크 추가 시 사용자가 요약에 사용할 Ollama 모델을 선택 가능. 환경 변수 `OLLAMA_MODEL_LISTS`(쉼표 구분)로 선택 가능 모델 정의. `GET /api/bookmarks/summary-models`로 목록 조회, `POST /api/bookmarks/` 요청 시 `summary_model`(선택)로 지정. 미지정 시 `OLLAMA_MODEL` 사용.
+- **URL 중복 체크 on/off**: 환경 변수 `DUPLICATE_URL_CHECK_ENABLED=True|False`. `True`(기본): 동일 URL 등록 시 409 반환. `False`: 중복 체크 생략.
+- **요약 프롬프트 외부화**: Backend `app/utils/prompt.conf`(JSON)에서 요약용 시스템/유저 프롬프트 정의 (`system`, `user_template` 배열 형식).
 
 ### 2026-02-14: 환경 변수 관리 개선 및 UI 개선
 

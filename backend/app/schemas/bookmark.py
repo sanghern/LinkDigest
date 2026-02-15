@@ -14,6 +14,7 @@ class BookmarkCreate(BaseModel):
     url: HttpUrl  # 필수 입력값
     title: Optional[str] = None  # 선택 입력값
     tags: Optional[List[str]] = []  # 선택 입력값
+    summary_model: Optional[str] = None  # 요약에 사용할 모델 (미지정 시 기본 모델 사용)
 
 class BookmarkUpdate(BaseModel):
     title: Optional[str] = None

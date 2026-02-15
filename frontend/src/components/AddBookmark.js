@@ -1,15 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 
 const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
     const [formData, setFormData] = useState({
-        url: '',          // 필수 입력
-        title: '',        // 선택 입력
-        tags: ''          // 선택 입력
+        url: '',             // 필수 입력
+        title: '',           // 선택 입력
+        tags: '',            // 선택 입력
+        summary_model: ''    // 요약에 사용할 모델 (선택)
     });
+    const [modelList, setModelList] = useState([]);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [duplicateError, setDuplicateError] = useState('');
+
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const res = await api.bookmarks.getSummaryModels();
+                const models = res?.models || [];
+                setModelList(models);
+                if (models.length > 0) {
+                    setFormData(prev => ({ ...prev, summary_model: prev.summary_model || models[0] }));
+                }
+            } catch (e) {
+                console.error('요약 모델 목록 로드 실패:', e);
+            }
+        };
+        fetchModels();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -26,11 +44,11 @@ const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
             // API 요청 데이터 준비
             const bookmarkData = {
                 url: formData.url,
-                // 선택 입력값은 값이 있을 때만 포함
                 ...(formData.title.trim() && { title: formData.title }),
                 ...(formData.tags.trim() && { 
                     tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
-                })
+                }),
+                ...(formData.summary_model && { summary_model: formData.summary_model })
             };
 
             const response = await api.bookmarks.create(bookmarkData);
@@ -117,6 +135,26 @@ const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
                                 placeholder="https://"
                             />
                         </div>
+
+                        {/* 요약 모델 선택 */}
+                        {modelList.length > 0 && (
+                            <div>
+                                <label htmlFor="summary_model" className="block text-sm font-medium text-gray-700 mb-1">
+                                    요약 모델 <span className="text-gray-400">(선택)</span>
+                                </label>
+                                <select
+                                    name="summary_model"
+                                    id="summary_model"
+                                    value={formData.summary_model || modelList[0]}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                >
+                                    {modelList.map((m) => (
+                                        <option key={m} value={m}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {/* 제목 입력 필드 (선택) */}
                         <div>

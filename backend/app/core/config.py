@@ -70,10 +70,15 @@ class Settings(BaseSettings):
     def BACKEND_CORS_ORIGINS(self) -> List[str]:
         """CORS 허용 오리진 리스트"""
         return [
-            origin.strip() 
+            origin.strip()
             for origin in self.BACKEND_CORS_ORIGINS_STR.split(",")
             if origin.strip()
         ]
+
+    @property
+    def OLLAMA_SUMMARY_MODEL_LIST(self) -> List[str]:
+        """요약에 사용 가능한 모델 목록 (OLLAMA_MODEL_LISTS 파싱)"""
+        return [m.strip() for m in self.OLLAMA_MODEL_LISTS.split(",") if m.strip()]
 
     # OpenAI 설정
     OPENAI_API_KEY: str = ""
@@ -81,6 +86,7 @@ class Settings(BaseSettings):
     # Ollama 설정
     OLLAMA_API_URL: str = "http://localhost:11434/api/chat"
     OLLAMA_MODEL: str = "gpt-oss:120b-cloud"
+    OLLAMA_MODEL_LISTS: str = "gpt-oss:120b-cloud,emma3:27b-cloud"  # 요약용 선택 가능 모델 (쉼표 구분)
     TRANSLATE_MODEL: str = "translategemma:4b"
     
     # 초기 관리자 계정 설정 (db_init.py에서 사용)

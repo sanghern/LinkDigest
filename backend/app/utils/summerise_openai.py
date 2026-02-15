@@ -41,23 +41,20 @@ def _load_prompts() -> dict:
         }
 
 
-def summarize_article(text: str) -> str:
+def summarize_article(text: str, model: Optional[str] = None) -> str:
     """
-    Ollama Mistral:7b 모델을 사용하여 텍스트를 마크다운 형식으로 편집하는 함수
+    Ollama 모델을 사용하여 텍스트를 마크다운 형식으로 편집하는 함수
     
     Args:
         text (str): 편집할 텍스트 내용
+        model (str, optional): 사용할 모델명. 미지정 시 OLLAMA_MODEL 사용
         
     Returns:
         str: 편집된 텍스트. 오류 발생 시 빈 문자열 반환
-        
-    Note:
-        - Ollama 로컬 모델(Mistral:7b)을 사용하여 마크다운 형식으로 편집
-        - 컨텐츠 분류와 키워드 추출
-        - 중요 내용을 강조하고 가독성 높은 포맷 사용
     """
     try:
-        logger.info("Ollama API 요청 시작: 텍스트 편집")
+        use_model = (model or "").strip() or OLLAMA_MODEL
+        logger.info(f"Ollama API 요청 시작: 텍스트 편집 (모델: {use_model})")
         prompts = _load_prompts()
         system_content = prompts.get("system", "")
         user_content = (prompts.get("user_template", "{text}")).format(text=text)
@@ -66,7 +63,7 @@ def summarize_article(text: str) -> str:
         response = requests.post(
             OLLAMA_API_URL,
             json={
-                "model": OLLAMA_MODEL,
+                "model": use_model,
                 "messages": [
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": user_content},
