@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup, NavigableString
 import requests
 import logging
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, parse_qs
 from typing import Dict, Optional, Tuple, List
 import re
 import urllib3
@@ -17,6 +17,30 @@ class ScrapingService:
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
         }
+
+    def _normalize_boannews_url(self, url: str) -> str:
+        """보안뉴스 모바일 URL만 데스크톱 URL로 변환. m.boannews.com/html/detail.html?idx=... → www.boannews.com/media/view.asp?tab_type=1&idx=..."""
+        if not url or not url.strip():
+            return url
+        u = url.strip()
+        try:
+            parsed = urlparse(u)
+            if (parsed.netloc or '').split(':')[0].lower() != 'm.boannews.com' or 'detail.html' not in (parsed.path or '').lower():
+                return url
+            qs = parse_qs(parsed.query or '')
+            idx = (qs.get('idx') or [None])[0]
+            if not idx:
+                m = re.search(r'[?&]idx=(\d+)', u, re.I)
+                idx = m.group(1) if m else None
+            if not idx:
+                return url
+            tab_type = (qs.get('tab_type') or ['1'])[0]
+            normalized = f"https://www.boannews.com/media/view.asp?tab_type={tab_type}&idx={idx}"
+            logger.info(f"보안뉴스 URL 정규화: {u[:60]}... -> {normalized}")
+            return normalized
+        except Exception as e:
+            logger.debug(f"보안뉴스 URL 정규화 스킵: {e}")
+        return url
 
     def _get_page_content(self, url: str) -> Optional[BeautifulSoup]:
         """웹 페이지 내용 가져오기"""
@@ -86,6 +110,7 @@ class ScrapingService:
             '#dic_area',                 # 네이버 뉴스 기사 본문
             '._article_content',         # 네이버 뉴스 본문 클래스
             '#article-view-content-div',  # 데일리시큐 등
+            '#news_content',             # 보안뉴스(boannews) 기사 본문
             '[itemprop="articleBody"]',
             '.article-body',
             '.article_view',
@@ -174,6 +199,7 @@ class ScrapingService:
     def scrape(self, url: str) -> Dict[str, str]:
         """URL에서 컨텐츠를 스크랩"""
         try:
+            url = self._normalize_boannews_url(url)
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')

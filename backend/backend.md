@@ -133,6 +133,9 @@ backend/
 - **제목 번역**:
   - 영어 제목 자동 감지
   - 한글로 번역 후 `한글(영문)` 형태로 저장
+- **보안뉴스 예외 처리**:
+  - 모바일 URL(`m.boannews.com/html/detail.html?idx=...`)은 스크래핑 시 데스크톱 URL(`www.boannews.com/media/view.asp?tab_type=1&idx=...`)로 자동 변환 (`_normalize_boannews_url`)
+  - 본문 영역 선택자에 `#news_content` 포함
 
 ### 4. AI 요약 및 번역
 
@@ -140,8 +143,9 @@ backend/
 
 - **요약 모델**: `gpt-oss:120b-cloud` (기본값)
   - 마크다운 형식으로 요약 생성
-  - 분류 및 키워드 자동 추출
+  - 분류 및 키워드 자동 추출 (형식: `📌 키워드:`, `📌 **키워드:**`, `📌️ **분류:**` 등 지원)
   - 핵심 요약 5줄 생성
+  - **마크다운 헤딩 보정**: `## ##`, `### ###` 등 중복 헤딩을 하나로 치환 (스크래핑 본문·요약 결과 모두 적용, `summary_tasks.fix_markdown_heading_duplicates`)
 
 - **번역 모델**: `translategemma:4b`
   - 한글/영어 자동 감지

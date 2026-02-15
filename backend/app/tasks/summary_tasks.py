@@ -125,9 +125,6 @@ def update_bookmark_summary(bookmark_id: str, content: str, model: str = None):
             logger.warning(f"요약 업데이트할 북마크를 찾을 수 없음: id={bid}")
             return
 
-        # 요약 본문의 마크다운 헤딩 중복 보정 (## ##, ### ### 등 → 하나로)
-        content = fix_markdown_heading_duplicates(content)
-
         # OpenAI 요약 생성 (지정된 모델 또는 기본 모델 사용)
         summary = generate_summary(content, model=model)
 
@@ -135,6 +132,9 @@ def update_bookmark_summary(bookmark_id: str, content: str, model: str = None):
         if not summary or not summary.strip():
             logger.warning(f"요약 생성 실패 - 북마크 ID: {bid}, summary 컬럼은 갱신하지 않음")
             return
+
+        # 요약 본문에서도 마크다운 헤딩 중복 보정 (LLM이 ### ### 등으로 출력한 경우)
+        summary = fix_markdown_heading_duplicates(summary)
 
         catergory, keywords = extract_category_keywords(summary)
         logger.info(f"분류: {catergory}, 키워드: {keywords}")

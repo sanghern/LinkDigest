@@ -60,7 +60,7 @@ async def create_bookmark(
                     detail="이미 동일한 URL이 저장되어 있습니다.",
                 )
 
-        # URL 스크래핑
+        # URL 스크래핑 (보안뉴스 모바일 URL은 scrape 내부에서 데스크톱 URL로 정규화됨)
         scraped_data = scraping_service.scrape(url_str)
 
         #logger.info(f"스크래핑 결과: {scraped_data}")  # 스크래핑 결과 로깅

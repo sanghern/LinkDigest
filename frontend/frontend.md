@@ -17,8 +17,9 @@
 ```
 frontend/
 ├── public/                      # 정적 파일
-│   ├── index.html              # HTML 템플릿
-│   ├── manifest.json           # PWA 매니페스트
+│   ├── index.html              # HTML 템플릿 (파비콘: favicon.svg 우선 사용)
+│   ├── favicon.svg             # 사이트 아이콘 (탭·북마크·링크 미리보기용, 메인 페이지 아이콘)
+│   ├── manifest.json           # PWA 매니페스트 (icons에 favicon.svg 포함)
 │   └── robots.txt              # 검색 엔진 설정
 ├── src/
 │   ├── components/             # React 컴포넌트
@@ -144,6 +145,7 @@ frontend/
 - **모달 다이얼로그**: 북마크 추가/수정/삭제 시 모달 사용
 - **페이지네이션**: 대량 데이터를 효율적으로 표시
 - **자동 새로고침**: 로그 뷰어에서 자동 업데이트
+- **사이트 파비콘**: `public/favicon.svg` — 브라우저 탭·북마크·링크 공유 시(digest.aiground.ai 등) 메인 페이지 아이콘 표시. `index.html` 및 `manifest.json`에 반영.
 
 ---
 
