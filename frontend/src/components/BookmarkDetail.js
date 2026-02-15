@@ -19,6 +19,13 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
     const readCountIncreasedRef = useRef(null); // 현재 조회수 증가한 북마크 ID
     const isIncreasingRef = useRef(false); // 조회수 증가 중인지 추적 (중복 실행 방지)
 
+    // 공유: 대상 선택 모달 / 성공 팝업 (중복 오류 모달과 동일 스타일)
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [showShareSuccessModal, setShowShareSuccessModal] = useState(false);
+    const [shareSuccessTitle, setShareSuccessTitle] = useState('');
+    const [shareError, setShareError] = useState('');
+    const [isSharing, setIsSharing] = useState(false);
+
     // bookmark prop이 변경될 때 currentBookmark 업데이트
     useEffect(() => {
         if (bookmark && bookmark.id !== currentBookmark?.id) {
@@ -111,6 +118,31 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
         onClose(true);  // true를 전달하여 수정 모달을 열도록 함
     };
 
+    // 공유 버튼 클릭: 대상 선택 모달 열기
+    const handleShareClick = (e) => {
+        e.stopPropagation();
+        setShareError('');
+        setShowShareModal(true);
+    };
+
+    // 공유 실행 (Slack 또는 Notion 선택 후)
+    const handleShareSubmit = async (target) => {
+        if (!currentBookmark?.id || isSharing) return;
+        setShareError('');
+        setIsSharing(true);
+        try {
+            const res = await api.bookmarks.share(currentBookmark.id, target);
+            setShowShareModal(false);
+            setShareSuccessTitle(res.title || currentBookmark.title || '');
+            setShowShareSuccessModal(true);
+        } catch (err) {
+            const message = err.response?.data?.detail || err.message || '공유에 실패했습니다.';
+            setShareError(typeof message === 'string' ? message : '공유에 실패했습니다.');
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
     useEffect(() => {
         if (bookmark) {
             setIsInitialLoading(false);
@@ -135,17 +167,29 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
             {/* 상단 섹션: 뒤로가기 버튼과 페이지네이션을 같은 라인에 배치 */}
             <div className="flex-none px-3 sm:px-6 lg:px-8 xl:px-10 py-3 sm:py-4 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-3 sm:gap-0">
-                    {/* 왼쪽: 리스트로 돌아가기 버튼 */}
-                    <button 
-                        onClick={handleClose} 
-                        className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                        title="리스트로 돌아가기"
-                        aria-label="리스트로 돌아가기"
-                    >
-                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" strokeWidth="2.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                        </svg>
-                    </button>
+                    {/* 왼쪽: 리스트로 돌아가기 + 공유 버튼 */}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                        <button 
+                            onClick={handleClose} 
+                            className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                            title="리스트로 돌아가기"
+                            aria-label="리스트로 돌아가기"
+                        >
+                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+                        <button 
+                            onClick={handleShareClick} 
+                            className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 shadow border border-gray-200 hover:border-gray-300 transition-all duration-200"
+                            title="공유"
+                            aria-label="공유"
+                        >
+                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                        </button>
+                    </div>
 
                     {/* 오른쪽: 페이지네이션 */}
                     {totalPages > 1 && (
@@ -355,7 +399,7 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                         </div>
                     </div>
 
-                    {/* 두 번째 줄: 생성일, 수정일, 조회수 */}
+                    {/* 두 번째 줄: 생성일, 수정일, 조회수, 문구 */}
                     <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500">
                         <div className="flex items-center">
                             <span className="font-medium mr-1 sm:mr-2">생성일:</span>
@@ -371,9 +415,116 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                             <span className="font-medium mr-1 sm:mr-2">조회수:</span>
                             <span>{currentBookmark.read_count || 0}회</span>
                         </div>
+                        <span className="hidden sm:inline text-gray-300">|</span>
+                        <span className="text-gray-500">이 문서는 원문을 요약·재구성했으며, 이미지 링크를 참조하고 있습니다.</span>
                     </div>
                 </div>
             </div>
+
+            {/* 공유 대상 선택 모달 */}
+            {showShareModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 pt-8 sm:pt-12 lg:pt-16 z-50 overflow-y-auto">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col mt-4 sm:mt-8">
+                        <div className="flex-none px-6 py-4 border-b border-gray-200">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-semibold text-gray-800">공유</h2>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowShareModal(false); setShareError(''); }}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <p className="text-gray-700 mb-4">공유할 대상을 선택하세요.</p>
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    disabled={isSharing}
+                                    onClick={() => handleShareSubmit('slack')}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-[#4A154B] border border-transparent rounded-md shadow-sm hover:bg-[#3d1240] disabled:opacity-50"
+                                >
+                                    Slack
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isSharing}
+                                    onClick={() => handleShareSubmit('notion')}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-gray-800 border border-transparent rounded-md shadow-sm hover:bg-gray-900 disabled:opacity-50"
+                                >
+                                    Notion
+                                </button>
+                            </div>
+                            {shareError && (
+                                <div className="mt-4 flex items-start">
+                                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <p className="ml-3 text-gray-700">{shareError}</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-none px-6 py-4 border-t border-gray-200 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => { setShowShareModal(false); setShareError(''); }}
+                                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700"
+                            >
+                                취소
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 공유 성공 팝업 (북마크 URL 중복 팝업과 동일 스타일) */}
+            {showShareSuccessModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 pt-8 sm:pt-12 lg:pt-16 z-50 overflow-y-auto">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col mt-4 sm:mt-8">
+                        <div className="flex-none px-6 py-4 border-b border-gray-200">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-semibold text-gray-800">공유 완료</h2>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowShareSuccessModal(false)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="flex items-start">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                                <p className="ml-3 text-gray-700">
+                                    {shareSuccessTitle ? `"${shareSuccessTitle}"(이)가 공유되었습니다.` : '공유되었습니다.'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex-none px-6 py-4 border-t border-gray-200 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShowShareSuccessModal(false)}
+                                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700"
+                            >
+                                확인
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

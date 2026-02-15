@@ -261,6 +261,11 @@ const api = {
                 throw error;
             }
         },
+
+        share: async (bookmarkId, target) => {
+            const response = await axiosInstance.post(`/bookmarks/${bookmarkId}/share`, { target });
+            return response.data;
+        },
     },
 
     // Logs

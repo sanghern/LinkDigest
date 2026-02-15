@@ -23,7 +23,7 @@ const Navigation = () => {
             <nav className="bg-gray-800 text-white p-4">
                 <div className="container mx-auto flex justify-between items-center">
                     <Link to="/login" className="text-xl font-bold">
-                        Link_Digest:북마크 요약
+                        LinkDigest
                     </Link>
                     {location.pathname !== '/login' && (
                         <Link
@@ -42,7 +42,7 @@ const Navigation = () => {
         <nav className="bg-gray-800 text-white p-4">
             <div className="container mx-auto flex justify-between items-center">
                 <Link to="/" className="text-xl font-bold">
-                    Link_Digest:북마크 요약
+                    LinkDigest
                 </Link>
                 <div className="flex items-center space-x-4">
                     <span>{user.username}</span>

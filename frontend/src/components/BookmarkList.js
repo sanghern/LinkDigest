@@ -261,7 +261,7 @@ const BookmarkList = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-0">
                     <div className="flex items-center gap-3 flex-wrap">
                         <h1 className="text-lg sm:text-xl font-bold">
-                            북마크 요약{totalItems > 0 && `(${totalItems}개)`}
+                            북마크 요약목록{totalItems > 0 && `(${totalItems}개)`}
                         </h1>
                         {selectedTags.length > 0 && (
                             <div className="flex items-center gap-2 flex-wrap">

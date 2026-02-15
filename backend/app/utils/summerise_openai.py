@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 from dotenv import load_dotenv
 import logging
@@ -11,6 +12,34 @@ logger = logging.getLogger(__name__)
 # Ollama API 설정 (config.py의 settings에서 가져옴)
 OLLAMA_API_URL = settings.OLLAMA_API_URL
 OLLAMA_MODEL = settings.OLLAMA_MODEL
+
+# 프롬프트 설정 파일 경로 (이 모듈과 같은 디렉터리의 prompt.conf)
+_PROMPT_CONF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt.conf")
+
+
+def _normalize_prompt(value):  # str | list -> str (newline 유지)
+    """문자열이면 그대로, 리스트면 줄 단위로 \\n 연결."""
+    if isinstance(value, list):
+        return "\n".join(str(line) for line in value)
+    return value if isinstance(value, str) else ""
+
+
+def _load_prompts() -> dict:
+    """prompt.conf(JSON)에서 system/user_template 로드. 실패 시 기본 문자열 반환."""
+    try:
+        with open(_PROMPT_CONF_PATH, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        return {
+            "system": _normalize_prompt(raw.get("system", "")),
+            "user_template": _normalize_prompt(raw.get("user_template", "{text}")),
+        }
+    except Exception as e:
+        logger.warning(f"prompt.conf 로드 실패, 기본 프롬프트 사용: {e}")
+        return {
+            "system": "당신은 입력한 웹 컨텐츠를 핵심만 추출하여 가독성 높은 마크다운 형식으로 정리하는 전문 편집자입니다.",
+            "user_template": "다음 컨텐츠를 위 규칙에 맞게 정리하세요:\n\n{text}\n\n",
+        }
+
 
 def summarize_article(text: str) -> str:
     """
@@ -29,30 +58,20 @@ def summarize_article(text: str) -> str:
     """
     try:
         logger.info("Ollama API 요청 시작: 텍스트 편집")
-        
+        prompts = _load_prompts()
+        system_content = prompts.get("system", "")
+        user_content = (prompts.get("user_template", "{text}")).format(text=text)
+
         # Ollama API 요청
         response = requests.post(
             OLLAMA_API_URL,
             json={
                 "model": OLLAMA_MODEL,
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": "당신은 입력한 컨텐츠를 가독성 좋게 마크다운 형식으로 편집하는 전문가입니다. \
-                        마크다운 형식으로 편집하며, 제목(`##`), 소제목(`###`), 리스트(`-` 또는 `1.`)을 적절히 사용하여 가독성을 높이세요. \
-                        중요한 통계 및 인용문을 **굵은 글씨**로 강조하세요., \
-                        또한 비교가 가능한 내용을 비교표를 만들어 주세요.\
-                        참조 링크는 항상 포함하세요. \
-                        이미지 링크는 컨텐츠 내에 적절하게 배치하세요. \
-                        첫부문에 컨텐츠에 대한 기사,블로그,논문 등과 같은 분류기준으로 `📌️ 분류`와 `📌 키워드`를 한라인씩 추가하고, \
-                        다음에 5줄 `📌 핵심요약`을 각각 라인으로 구분하여 추가하세요."
-                    },
-                    {
-                        "role": "user",
-                        "content": f"다음 컨텐츠가 한글이 아닌경우 한글로 번역한 후 가독성 좋게 나열식으로 편집해 주세요:\n\n{text}\n\n"
-                    }
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": user_content},
                 ],
-                "stream": False
+                "stream": False,
             },
             timeout=300  # 5분 타임아웃 (대용량 텍스트 처리 고려)
         )

@@ -6,13 +6,15 @@ from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.models.bookmark import Bookmark
-from app.schemas.bookmark import BookmarkCreate, BookmarkUpdate, BookmarkResponse, BookmarkListResponse
+from app.schemas.bookmark import BookmarkCreate, BookmarkUpdate, BookmarkResponse, BookmarkListResponse, ShareRequest, ShareResponse
 from uuid import UUID
 from datetime import datetime
 from app.models.log import Log
 from app.crud.crud_bookmark import bookmark as crud_bookmark
 from app.services.scraping_service import ScrapingService
 from app.tasks.summary_tasks import submit_summary_task
+from app.services.share_service import share_to_slack, share_to_notion
+from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -48,14 +50,15 @@ async def create_bookmark(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="URL을 입력해주세요.",
             )
-        # 전체 사용자 기준 URL 중복 체크 (409)
-        existing = crud_bookmark.get_by_url(db, url=url_str)
-        if existing:
-            logger.info(f"북마크 URL 중복 - 사용자: {current_user.username}, URL: {url_str}")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="이미 동일한 URL이 저장되어 있습니다.",
-            )
+        # 전체 사용자 기준 URL 중복 체크 (DUPLICATE_URL_CHECK_ENABLED=True일 때만)
+        if settings.DUPLICATE_URL_CHECK_ENABLED:
+            existing = crud_bookmark.get_by_url(db, url=url_str)
+            if existing:
+                logger.info(f"북마크 URL 중복 - 사용자: {current_user.username}, URL: {url_str}")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="이미 동일한 URL이 저장되어 있습니다.",
+                )
 
         # URL 스크래핑
         scraped_data = scraping_service.scrape(url_str)
@@ -313,4 +316,28 @@ async def increase_read_count(
         return updated_bookmark
     except Exception as e:
         logger.error(f"조회수 증가 실패: {str(e)}")
-        raise 
+        raise
+
+
+@router.post("/{bookmark_id}/share", response_model=ShareResponse)
+def share_bookmark(
+    bookmark_id: UUID,
+    body: ShareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """북마크 요약을 Slack 또는 Notion으로 공유. 성공 시 공유한 북마크 제목 반환."""
+    bookmark = crud_bookmark.get(db, id=bookmark_id)
+    if not bookmark:
+        raise HTTPException(status_code=404, detail="Bookmark not found")
+    if bookmark.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+    try:
+        if body.target == "slack":
+            title = share_to_slack(bookmark)
+        else:
+            title = share_to_notion(bookmark)
+        return ShareResponse(success=True, title=title or bookmark.title or "")
+    except Exception as e:
+        logger.exception(f"공유 실패 bookmark_id={bookmark_id} target={body.target}")
+        raise HTTPException(status_code=500, detail="공유 처리 중 오류가 발생했습니다.")

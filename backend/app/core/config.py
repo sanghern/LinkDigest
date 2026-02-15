@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     # 디버그 모드 설정
     DEBUG: bool = False  # 프로덕션에서는 False로 설정
 
+    # URL 중복 등록 체크 (on: 중복 시 409 반환, off: 체크 생략)
+    DUPLICATE_URL_CHECK_ENABLED: bool = True
+
     model_config = SettingsConfigDict(
         case_sensitive=True,  # 대소문자 구분
         env_file=".env",  # 환경변수 파일 경로

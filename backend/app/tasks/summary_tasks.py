@@ -76,7 +76,7 @@ def extract_category_keywords(text):
     for pattern in keyword_patterns:
         keyword_match = re.search(pattern, text, re.MULTILINE)
         if keyword_match:
-            keywords = keyword_match.group(1).strip().replace('*', '')
+            keywords = keyword_match.group(1).strip().replace('*', '').replace('`', '').replace(':', '').replace(' ', '')
             break
     
     # 앞뒤 공백 한번 더 제거
@@ -120,7 +120,7 @@ def update_bookmark_summary(bookmark_id: str, content: str):
         bookmark.summary = summary
         bookmark.catergory = catergory
         if keywords:
-            keyword_list = [k.strip() for k in keywords.split(',') if k.strip()]
+            keyword_list = [t for k in keywords.split(',') if (t := k.strip().replace('*', '').replace('`', '').replace(':', '').replace(' ', '').strip())]
             bookmark.tags = keyword_list
         else:
             bookmark.tags = []

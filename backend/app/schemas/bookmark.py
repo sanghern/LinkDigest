@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, HttpUrl
 from datetime import datetime
 from uuid import UUID
@@ -54,4 +54,13 @@ class BookmarkListResponse(BaseModel):
     total_pages: int
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+
+class ShareRequest(BaseModel):
+    target: Literal["slack", "notion"]
+
+
+class ShareResponse(BaseModel):
+    success: bool = True
+    title: str
