@@ -1,4 +1,4 @@
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 import requests
 import logging
 from urllib.parse import urlparse, urljoin
@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 class ScrapingService:
     def __init__(self):
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
         }
 
     def _get_page_content(self, url: str) -> Optional[BeautifulSoup]:
@@ -77,9 +79,18 @@ class ScrapingService:
         seen_urls = set()   # 중복 URL 방지를 위한 집합
         seen_images = set() # 중복 이미지 방지를 위한 집합
 
-        # 1. 메인 컨텐츠 영역 찾기
+        # 1. 메인 컨텐츠 영역 찾기 (뉴스/블로그 사이트별 본문 선택자 우선)
         main_content = None
-        for selector in ['article', 'main', '.post-content', '.article-content', '.entry-content']:
+        for selector in [
+            '#newsct_article',           # 네이버 뉴스(mnews)
+            '#dic_area',                 # 네이버 뉴스 기사 본문
+            '._article_content',         # 네이버 뉴스 본문 클래스
+            '#article-view-content-div',  # 데일리시큐 등
+            '[itemprop="articleBody"]',
+            '.article-body',
+            '.article_view',
+            'article', 'main', '.post-content', '.article-content', '.entry-content',
+        ]:
             main_content = soup.select_one(selector)
             if main_content:
                 break
@@ -125,6 +136,20 @@ class ScrapingService:
                             alt_text = img.get('alt', '이미지') or '이미지'
                             content.append(f"![{alt_text}]({img_url})")
 
+        # 3.5 네이버 뉴스 등: 본문이 <p>가 아닌 텍스트+<br>만 있는 경우 보완
+        if len(content) < 3 and target.get_text(strip=True):
+            target_text = target.get_text(strip=True)
+            if len(target_text) > 200:
+                # <br>을 줄바꿈으로 치환 후 문단 단위로 분리
+                for br in target.find_all('br'):
+                    br.replace_with(NavigableString('\n'))
+                full = target.get_text(separator='\n')
+                for block in full.split('\n'):
+                    text = ' '.join(block.strip().split())
+                    if text and len(text) > 20 and text not in seen_texts:
+                        seen_texts.add(text)
+                        content.append(text)
+
         # 4. 참조 링크 정보를 컨텐츠 끝에 마크다운 형식으로 추가
         if reference_links:
             content.append("\n### 참조 링크")
@@ -145,15 +170,6 @@ class ScrapingService:
         domain = urlparse(url).netloc
         return domain.replace('www.', '')
 
-    # def _extract_link_content(self, url: str) -> str:
-    #     """참조 링크의 내용 추출 - 주석 처리"""
-    #     try:
-    #         response = requests.get(url, headers=self.headers, timeout=5)
-    #         soup = BeautifulSoup(response.text, 'html.parser')
-    #         return soup.get_text()[:500] + "..."  # 첫 500자만 추출
-    #     except Exception as e:
-    #         logger.warning(f"링크 내용 추출 실패: {url} - {str(e)}")
-    #         return ""
 
     def scrape(self, url: str) -> Dict[str, str]:
         """URL에서 컨텐츠를 스크랩"""
