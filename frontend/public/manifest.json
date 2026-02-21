@@ -1,6 +1,6 @@
 {
-  "short_name": "LinkDigest",
-  "name": "LinkDigest(북마크 요약) 서비스",
+  "short_name": "Link Digest",
+  "name": "Link Digest(북마크 요약) 서비스",
   "icons": [
     {
       "src": "favicon.svg",

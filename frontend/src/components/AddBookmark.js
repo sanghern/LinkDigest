@@ -3,7 +3,8 @@ import api from '../utils/api';
 
 const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
     const [formData, setFormData] = useState({
-        url: '',             // 필수 입력
+        url: '',             // URL 또는 아래 content 중 하나 입력
+        content: '',         // 요약할 컨텐츠 직접 입력 (URL 미입력 시 사용)
         title: '',           // 선택 입력
         tags: '',            // 선택 입력
         summary_model: ''    // 요약에 사용할 모델 (선택)
@@ -36,20 +37,25 @@ const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
         setDuplicateError('');
 
         try {
-            // URL이 비어있는지 확인
-            if (!formData.url.trim()) {
-                throw new Error('URL을 입력해주세요.');
+            const hasUrl = formData.url.trim() !== '';
+            const hasContent = formData.content.trim() !== '';
+            if (!hasUrl && !hasContent) {
+                throw new Error('URL 또는 요약할 컨텐츠를 입력해주세요.');
             }
 
-            // API 요청 데이터 준비
+            // API 요청 데이터 준비 (URL 입력 시 url 전송, 컨텐츠만 입력 시 content 전송)
             const bookmarkData = {
-                url: formData.url,
-                ...(formData.title.trim() && { title: formData.title }),
-                ...(formData.tags.trim() && { 
+                ...(formData.title.trim() && { title: formData.title.trim() }),
+                ...(formData.tags.trim() && {
                     tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
                 }),
                 ...(formData.summary_model && { summary_model: formData.summary_model })
             };
+            if (hasUrl) {
+                bookmarkData.url = formData.url.trim();
+            } else {
+                bookmarkData.content = formData.content.trim();
+            }
 
             const response = await api.bookmarks.create(bookmarkData);
             onAdd(response);
@@ -119,20 +125,50 @@ const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* URL 입력 필드 (필수) */}
+                        {/* URL 입력 필드 (URL 또는 아래 컨텐츠 중 하나 입력) */}
                         <div>
                             <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
-                                URL <span className="text-red-500">*</span>
+                                URL <span className="text-gray-400">(또는 아래에 요약할 컨텐츠 입력)</span>
                             </label>
                             <input
                                 type="url"
                                 name="url"
                                 id="url"
-                                required
                                 value={formData.url}
                                 onChange={handleChange}
                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                 placeholder="https://"
+                            />
+                        </div>
+
+                        {/* 제목 입력 필드 (선택) */}
+                        <div>
+                            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                                제목 <span className="text-gray-400">(선택)</span>
+                            </label>
+                            <input
+                                type="text"
+                                name="title"
+                                id="title"
+                                value={formData.title}
+                                onChange={handleChange}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            />
+                        </div>
+
+                        {/* 요약할 컨텐츠 직접 입력 (URL 미입력 시 사용) */}
+                        <div>
+                            <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-1">
+                                요약할 컨텐츠 <span className="text-gray-400">(URL 없이 입력 시 이 내용으로 Ollama 요약)</span>
+                            </label>
+                            <textarea
+                                name="content"
+                                id="content"
+                                rows={5}
+                                value={formData.content}
+                                onChange={handleChange}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                placeholder="URL 대신 요약할 텍스트를 붙여넣으세요."
                             />
                         </div>
 
@@ -155,21 +191,6 @@ const AddBookmark = ({ onClose, onAdd, onDuplicateError }) => {
                                 </select>
                             </div>
                         )}
-
-                        {/* 제목 입력 필드 (선택) */}
-                        <div>
-                            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-                                제목 <span className="text-gray-400">(선택)</span>
-                            </label>
-                            <input
-                                type="text"
-                                name="title"
-                                id="title"
-                                value={formData.title}
-                                onChange={handleChange}
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            />
-                        </div>
 
                         {/* 키워드 입력 필드 (선택) */}
                         <div>

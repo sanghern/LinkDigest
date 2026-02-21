@@ -21,7 +21,8 @@ backend/
 │   │   ├── api.py             # 메인 API 라우터
 │   │   └── endpoints/         # 엔드포인트 모듈
 │   │       ├── auth.py        # 인증 관련 엔드포인트
-│   │       ├── bookmarks.py   # 북마크 관련 엔드포인트
+│   │       ├── bookmarks.py   # 북마크 관련 엔드포인트 (인증 필요)
+│   │       ├── bookmarks_public.py  # 공개 북마크 엔드포인트 (인증 불필요)
 │   │       └── logs.py        # 로그 관련 엔드포인트
 │   ├── core/                   # 핵심 설정 및 유틸리티
 │   │   ├── config.py          # 애플리케이션 설정
@@ -156,7 +157,15 @@ backend/
 - 요약 생성은 백그라운드 스레드 풀에서 처리
 - ThreadPoolExecutor 사용 (최대 3개 워커)
 
-### 5. 로그 관리 시스템
+### 5. 공개 북마크 API (인증 불필요)
+
+- **목적**: 비로그인 사용자가 `is_public=True`인 북마크만 조회
+- **경로**: `/api/public/bookmarks/` (목록), `/api/public/bookmarks/{bookmark_id}` (단건, UUID)
+- **인증**: 없음 (Authorization 헤더 불필요)
+- **CRUD**: `app/crud/crud_bookmark.py`의 `get_multi_public`, `count_public`, `get_public_by_id` 사용
+- **엔드포인트**: `app/api/endpoints/bookmarks_public.py`에서 인증 의존성 없이 제공
+
+### 6. 로그 관리 시스템
 
 - **로그 저장**: 프론트엔드/백엔드 로그 저장
 - **로그 조회**: 페이지네이션 지원
@@ -292,6 +301,26 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## API 엔드포인트
 
+API는 **공개용**(인증 불필요)과 **인증용**(JWT 필요)으로 구분됩니다.
+
+### 공개 북마크 (Public Bookmarks, 인증 불필요)
+
+#### GET `/api/public/bookmarks/`
+`is_public=True`인 북마크 목록 조회. 토큰 없이 호출 가능.
+
+**Query Parameters:**
+- `page`: 페이지 번호 (기본값: 1)
+- `per_page`: 페이지당 항목 수 (기본값: 10, 최대 100)
+
+**Response:** `BookmarkListResponse` (items, total, page, per_page, total_pages)
+
+#### GET `/api/public/bookmarks/{bookmark_id}`
+`is_public=True`인 북마크 단건 조회. `bookmark_id`는 UUID.
+
+**Response:** `BookmarkResponse` (해당 북마크가 공개가 아니거나 없으면 404)
+
+---
+
 ### 인증 (Authentication)
 
 #### POST `/api/auth/login`
@@ -341,7 +370,7 @@ Authorization: Bearer {access_token}
 Authorization: Bearer {access_token}
 ```
 
-### 북마크 (Bookmarks)
+### 북마크 (Bookmarks, 인증 필요)
 
 #### POST `/api/bookmarks/`
 새 북마크 생성
@@ -432,6 +461,8 @@ Authorization: Bearer {access_token}
 #### PUT `/api/bookmarks/{bookmark_id}`
 북마크 수정
 
+- **권한**: 등록자만 수정 가능. 등록자가 아니면 **403**, `detail: "권한 없음"` 반환.
+
 **Request Body:**
 ```json
 {
@@ -445,12 +476,26 @@ Authorization: Bearer {access_token}
 #### DELETE `/api/bookmarks/{bookmark_id}`
 북마크 삭제
 
+- **권한**: 북마크 ID로 조회 후 소유자 확인. 없으면 404, 등록자가 아니면 **403**, `detail: "권한 없음"` 반환. 등록자만 삭제 가능.
+
 #### POST `/api/bookmarks/{bookmark_id}/increase-read-count`
 조회수 증가
 
 ---
 
 ## 최근 업데이트
+
+### 공개 북마크 API (2026-02)
+
+- **공개용 API 분리**: 인증 없이 접근 가능한 엔드포인트를 `/api/public/bookmarks`로 분리.
+- **GET /api/public/bookmarks/**: `is_public=True`인 북마크 목록 조회 (페이지네이션).
+- **GET /api/public/bookmarks/{bookmark_id}**: `is_public=True`인 북마크 단건 조회 (bookmark_id는 UUID).
+- **구현**: `app/api/endpoints/bookmarks_public.py`, CRUD `get_multi_public`, `count_public`, `get_public_by_id`.
+
+### 북마크 수정·삭제 권한 검증 (2026-02-12)
+
+- **PUT /api/bookmarks/{id}**: 등록자가 아니면 403, `detail: "권한 없음"` 반환.
+- **DELETE /api/bookmarks/{id}**: ID로 북마크 조회 후, 없으면 404, 등록자가 아니면 403 `detail: "권한 없음"` 반환. 기존에는 소유자만 조회해 타인 글 삭제 시 404였으나, 이제 권한 없음 시 403으로 명확히 구분.
 
 ### 요약 모델 선택 및 설정 기능
 

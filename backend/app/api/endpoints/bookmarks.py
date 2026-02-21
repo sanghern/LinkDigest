@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 # 스크래핑 서비스 인스턴스 생성
 scraping_service = ScrapingService()
 
+# 공개용 API는 bookmarks_public.py 로 분리 (인증 불필요)
+
+
+def _first_line_as_title(text: str, max_len: int = 255) -> str:
+    """본문에서 첫 줄을 제목으로 사용 (길이 제한)."""
+    if not text or not text.strip():
+        return "직접 입력"
+    first = text.strip().split("\n")[0].strip()
+    return (first[:max_len] + "…") if len(first) > max_len else first
+
+
 @router.post("/", response_model=BookmarkResponse)
 async def create_bookmark(
     bookmark: BookmarkCreate,
@@ -29,80 +40,70 @@ async def create_bookmark(
     current_user: User = Depends(get_current_user)
 ):
     """
-    새 북마크 생성 엔드포인트
-    
-    Args:
-        bookmark: 생성할 북마크 데이터 (필수: URL, 선택: 제목, 태그)
-        db: 데이터베이스 세션
-        current_user: 현재 인증된 사용자
-        
-    Returns:
-        BookmarkResponse: 생성된 북마크 정보
-        
-    Note:
-        - URL 중복 체크
-        - 태그 처리
+    새 북마크 생성 엔드포인트.
+    URL 입력 시 스크래핑 후 요약, URL 미입력·컨텐츠 입력 시 입력한 컨텐츠로 Ollama 요약.
     """
     try:
-        url_str = str(bookmark.url).strip()
-        if not url_str:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="URL을 입력해주세요.",
-            )
-        # 전체 사용자 기준 URL 중복 체크 (DUPLICATE_URL_CHECK_ENABLED=True일 때만)
-        if settings.DUPLICATE_URL_CHECK_ENABLED:
-            existing = crud_bookmark.get_by_url(db, url=url_str)
-            if existing:
-                logger.info(f"북마크 URL 중복 - 사용자: {current_user.username}, URL: {url_str}")
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="이미 동일한 URL이 저장되어 있습니다.",
-                )
-
-        # URL 스크래핑 (보안뉴스 모바일 URL은 scrape 내부에서 데스크톱 URL로 정규화됨)
-        scraped_data = scraping_service.scrape(url_str)
-
-        #logger.info(f"스크래핑 결과: {scraped_data}")  # 스크래핑 결과 로깅
-        
-        # 북마크 데이터 준비
-        bookmark_data = bookmark.model_dump()
-        bookmark_data['url'] = url_str
-        
-        # 제목이 없으면 스크래핑한 제목 사용
-        if not bookmark_data.get('title'):
-            #logger.info(f"스크래핑한 제목 사용: {scraped_data['title']}")
-            bookmark_data['title'] = scraped_data['title']
-            
-        # content는 저장하고 summary는 비동기로 처리
-        bookmark_data.update({
-            'source_name': scraped_data['source_name'],
-            'content': scraped_data['content'],
-            'summary': '요약 생성 중...',  # 임시 메시지
-            'user_id': current_user.id
-        })
-        # 요약 모델은 DB 컬럼이 아니므로 저장 전 제거
+        bookmark_data = bookmark.model_dump(exclude_unset=True)
         summary_model = bookmark_data.pop("summary_model", None) or settings.OLLAMA_MODEL
         if summary_model not in settings.OLLAMA_SUMMARY_MODEL_LIST:
             summary_model = settings.OLLAMA_MODEL
-        
-        # 북마크 생성
-        db_bookmark = Bookmark(**bookmark_data)
+
+        url_str = (bookmark.url and str(bookmark.url).strip()) or ""
+        content_input = (bookmark.content or "").strip()
+
+        if url_str:
+            # URL 입력 경로: 스크래핑 후 요약
+            if settings.DUPLICATE_URL_CHECK_ENABLED:
+                existing = crud_bookmark.get_by_url(db, url=url_str)
+                if existing:
+                    logger.info(f"북마크 URL 중복 - 사용자: {current_user.username}, URL: {url_str}")
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="이미 동일한 URL이 저장되어 있습니다.",
+                    )
+            scraped_data = scraping_service.scrape(url_str)
+            title = (bookmark_data.get("title") or "").strip() or scraped_data["title"]
+            content_to_summarize = scraped_data["content"]
+            source_name = scraped_data["source_name"]
+        else:
+            # 컨텐츠만 입력 경로: 스크래핑 없이 입력 컨텐츠로 요약
+            if not content_input:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="URL 또는 요약할 컨텐츠를 입력해주세요.",
+                )
+            title = (bookmark_data.get("title") or "").strip() or _first_line_as_title(content_input)
+            content_to_summarize = content_input
+            source_name = "직접 입력"
+            url_str = ""
+
+        tags = bookmark_data.get("tags") or []
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+
+        db_bookmark = Bookmark(
+            title=title[:255],
+            url=url_str,
+            source_name=source_name,
+            content=content_to_summarize,
+            summary="요약 생성 중...",
+            tags=tags,
+            user_id=current_user.id,
+        )
         db.add(db_bookmark)
         db.commit()
         db.refresh(db_bookmark)
-        
-        # 비동기 요약 태스크 실행 (선택된 모델 또는 기본 모델 사용)
-        submit_summary_task(str(db_bookmark.id), scraped_data["content"], model=summary_model)
-        
+
+        submit_summary_task(str(db_bookmark.id), content_to_summarize, model=summary_model)
         logger.info(f"북마크 생성 완료 - ID: {db_bookmark.id}")
         return db_bookmark
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"북마크 생성 실패: {str(e)}")
-        logger.exception("상세 에러:")  # 스택 트레이스 로깅
+        logger.exception("상세 에러:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"북마크 생성 중 오류가 발생했습니다: {str(e)}"
@@ -134,20 +135,11 @@ def get_bookmarks(
     #logger.debug(f"[API] get_bookmarks 호출됨 - tags 파라미터: {tags}, 타입: {type(tags)}")
     #logger.debug(f"[API] get_bookmarks - page: {page}, per_page: {per_page}, 사용자: {current_user.username}")
     
-    # 태그가 제공된 경우 태그로 필터링
+    # 태그가 제공된 경우 태그로 필터링 (본인 + is_public 노출)
     if tags and len(tags) > 0:
-        #logger.info(f"[API] 태그 필터 검색 요청 - 사용자: {current_user.username}, 태그: {tags}, 페이지: {page}")
-        
-        # 전체 아이템 수 조회 (태그 필터링, AND 조건)
         total = crud_bookmark.count_by_owner_with_tags(
-            db=db, 
-            owner_id=current_user.id,
-            tags=tags
+            db=db, owner_id=current_user.id, tags=tags
         )
-        
-        #logger.info(f"[API] 태그 필터 검색 결과 - 총 개수: {total}")
-        
-        # 페이지 아이템 조회 (태그 필터링, AND 조건)
         bookmarks = crud_bookmark.get_multi_by_owner_with_tags(
             db=db,
             owner_id=current_user.id,
@@ -155,19 +147,10 @@ def get_bookmarks(
             skip=skip,
             limit=per_page
         )
-        
-        #logger.info(f"[API] 태그 필터 검색 완료 - 반환된 북마크 수: {len(bookmarks)}")
     else:
-        # 태그가 없는 경우 일반 조회
-        #logger.debug(f"[API] 태그 없음 - 일반 조회 모드")
-        # 전체 아이템 수 조회
-        total = crud_bookmark.count_by_owner(
-            db=db, 
-            owner_id=current_user.id
-        )
-        
-        # 페이지 아이템 조회
-        bookmarks = crud_bookmark.get_multi_by_owner(
+        # 일반 조회: 본인 소유 + is_public=True인 북마크만 노출
+        total = crud_bookmark.count_visible_to_user(db=db, owner_id=current_user.id)
+        bookmarks = crud_bookmark.get_multi_visible_to_user(
             db=db,
             owner_id=current_user.id,
             skip=skip,
@@ -195,9 +178,12 @@ def read_bookmark(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    bookmark = crud_bookmark.get(db, id=bookmark_id)
+    """북마크 상세 조회. 본인 소유 또는 is_public=True인 경우만 허용."""
+    bookmark = crud_bookmark.get(db, bookmark_id)
     if not bookmark:
         raise HTTPException(status_code=404, detail="Bookmark not found")
+    if bookmark.user_id != current_user.id and not bookmark.is_public:
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
     return bookmark
 
 @router.put("/{bookmark_id}", response_model=BookmarkResponse)
@@ -212,7 +198,7 @@ async def update_bookmark(
         #logger.info(f"북마크 수정 시도 - ID: {bookmark_id}, 사용자: {current_user.username}")
         
         # 1. 기존 북마크 조회
-        bookmark = crud_bookmark.get(db, id=bookmark_id)
+        bookmark = crud_bookmark.get(db, bookmark_id)
         if not bookmark:
             logger.warning(f"북마크를 찾을 수 없음 - ID: {bookmark_id}")
             raise HTTPException(
@@ -220,12 +206,12 @@ async def update_bookmark(
                 detail="북마크를 찾을 수 없습니다."
             )
         
-        # 2. 권한 확인
+        # 2. 권한 확인 (등록자만 수정 가능)
         if bookmark.user_id != current_user.id:
             logger.warning(f"북마크 수정 권한 없음 - ID: {bookmark_id}, 요청 사용자: {current_user.username}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="이 북마크를 수정할 권한이 없습니다."
+                detail="권한 없음"
             )
 
         # 3. URL 유효성 검사
@@ -285,17 +271,15 @@ async def delete_bookmark(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """북마크 삭제"""
+    """북마크 삭제 (등록자만 가능)."""
     logger.info(f"북마크 삭제 시도 - ID: {bookmark_id}, 사용자: {current_user.username}")
     
-    bookmark = db.query(Bookmark).filter(
-        Bookmark.id == bookmark_id,
-        Bookmark.user_id == current_user.id
-    ).first()
-    
+    bookmark = crud_bookmark.get(db, bookmark_id)
     if not bookmark:
-        logger.warning(f"북마크를 찾을 수 없음 - ID: {bookmark_id}")
-        raise HTTPException(status_code=404, detail="Bookmark not found")
+        raise HTTPException(status_code=404, detail="북마크를 찾을 수 없습니다.")
+    if bookmark.user_id != current_user.id:
+        logger.warning(f"북마크 삭제 권한 없음 - ID: {bookmark_id}, 요청 사용자: {current_user.username}")
+        raise HTTPException(status_code=403, detail="권한 없음")
     
     db.delete(bookmark)
     db.commit()
@@ -311,7 +295,7 @@ async def increase_read_count(
 ):
     logger.info(f"조회수 증가 요청 - 북마크 ID: {bookmark_id}, 사용자: {current_user.username}")
     try:
-        bookmark = crud_bookmark.get(db, id=bookmark_id)
+        bookmark = crud_bookmark.get(db, bookmark_id)
         if not bookmark:
             logger.error(f"북마크를 찾을 수 없음 - ID: {bookmark_id}")
             raise HTTPException(status_code=404, detail="Bookmark not found")
@@ -332,13 +316,19 @@ def share_bookmark(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """북마크 요약을 Slack 또는 Notion으로 공유. 성공 시 공유한 북마크 제목 반환."""
-    bookmark = crud_bookmark.get(db, id=bookmark_id)
+    """북마크 요약을 Slack/Notion으로 공유하거나, target=users 시 로그인 사용자에게 공개(is_public=True)."""
+    bookmark = crud_bookmark.get(db, bookmark_id)
     if not bookmark:
         raise HTTPException(status_code=404, detail="Bookmark not found")
     if bookmark.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
     try:
+        if body.target == "users":
+            bookmark.is_public = body.public if body.public is not None else True
+            db.add(bookmark)
+            db.commit()
+            db.refresh(bookmark)
+            return ShareResponse(success=True, title=bookmark.title or "")
         if body.target == "slack":
             title = share_to_slack(bookmark)
         else:

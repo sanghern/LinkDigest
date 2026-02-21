@@ -42,8 +42,9 @@ LinkDigest는 웹 URL을 입력받아 자동으로 콘텐츠를 스크래핑하�
 │                    FastAPI Backend (Port 8000)              │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  API Layer                                           │  │
+│  │  - /api/public/bookmarks (공개 북마크, 인증 불필요)  │  │
 │  │  - /api/auth (인증)                                  │  │
-│  │  - /api/bookmarks (북마크 CRUD)                       │  │
+│  │  - /api/bookmarks (북마크 CRUD, 인증 필요)            │  │
 │  │  - /api/logs (로그 관리)                             │  │
 │  └──────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────┐  │
@@ -237,6 +238,9 @@ Frontend: 북마크 목록 렌더링
 - **반응형 디자인**: 모바일 320px 이상, 태블릿 768px 이상, 데스크톱 1024px 이상에서 정상 동작.
 - **피드백**: 로딩 상태 표시, 성공/실패 메시지, 에러 메시지 명확 표시. 마크다운 코드 블록은 다크 테마로 가독성 확보.
 - **접근성 (권장)**: 키보드 네비게이션 지원, 스크린 리더 호환, 색상 대비 충족.
+- **공유 글 권한 UI**: 다른 사용자가 공유한 글은 수정·삭제 불가. 목록·글 보기에서 수정/삭제 아이콘은 등록자에게만 표시. 공개 아이콘 색으로 구분(내 공유=파랑, 타인 공유=초록).
+- **글 보기 화면**: 뒤로가기 아이콘과 제목 같은 라인, 제목 클릭 시 목록 복귀. 반응형에서 긴 제목 overflow 방지. 모바일에서는 아이콘 다음 줄에 제목, 내용보기에서 제목 전체 표시.
+- **첫 화면 및 공개 북마크**: 첫 화면 URL은 `/main`. 비로그인 사용자는 공개 북마크 목록을 로그인 후 목록과 동일한 카드/페이지네이션 UI로 조회. 공개 북마크 상세는 요약만 표시하고 컨텐츠 버튼은 제공하지 않음. API는 공개용(`/api/public/bookmarks`, `api.publicBookmarks`)과 인증용(`api.bookmarks` 등)으로 구분하여 정의·사용.
 
 ---
 
@@ -346,14 +350,20 @@ Frontend: 북마크 목록 렌더링
 
 ### 6.1 API 엔드포인트 구조
 
+API는 **공개용**(인증 불필요)과 **인증용**(JWT 필요)으로 구분됩니다.
+
 ```
 /api
-├── /auth
+├── /public/bookmarks        # 공개용 (인증 불필요)
+│   ├── GET  /               # 공개 북마크 목록 (is_public=True, 페이지네이션)
+│   └── GET  /{id}           # 공개 북마크 단건 (UUID, is_public=True만)
+│
+├── /auth                    # 인증용
 │   ├── POST /login          # 로그인
 │   ├── POST /logout         # 로그아웃
 │   └── GET  /me             # 현재 사용자 정보
 │
-├── /bookmarks
+├── /bookmarks               # 인증용
 │   ├── GET    /                 # 북마크 목록 조회 (페이지네이션, 필터링)
 │   ├── GET    /summary-models   # 요약용 모델 목록 (OLLAMA_MODEL_LISTS 기반)
 │   ├── POST   /                 # 북마크 생성 (body: url, title, tags, summary_model 선택)
@@ -362,7 +372,7 @@ Frontend: 북마크 목록 렌더링
 │   ├── DELETE /{id}             # 북마크 삭제
 │   └── POST   /{id}/increase-read-count  # 조회수 증가
 │
-└── /logs
+└── /logs                    # 인증용
     ├── GET  /               # 로그 목록 조회 (페이지네이션, 필터링)
     ├── POST /               # 로그 생성
     └── GET  /stats          # 로그 통계
@@ -845,6 +855,10 @@ REACT_APP_DEBUG=true
 - **Backend Docker Compose**: Dockerfile, docker-compose.yml, DOCKER_DEPLOY.md 추가. 외부 PostgreSQL 사용 기본, 실행 시 `.env` 사용. postgres/nginx는 profile(internal-db, with-nginx)로 선택 기동. DB 연결 검증 스크립트(scripts/verify_db.py) 추가.
 - **Frontend**: Docker 백엔드 연결 검증(verify-backend), start:docker, proxy 설정. 도메인(digest.aiground.ai) 접속 시 Invalid Host header 방지(DANGEROUSLY_DISABLE_HOST_CHECK) 반영.
 
+### 2026-02-12: 공유 글 권한 UI 및 글 보기 반응형
+- **Backend**: 북마크 수정(PUT)·삭제(DELETE) 시 등록자 확인. 비등록자 요청 시 403, `detail: "권한 없음"` 반환. 삭제는 ID로 조회 후 소유자 검증(기존 404 → 403 구분).
+- **Frontend**: 타인 공유 글 수정/삭제 비노출(목록·글 보기). 공개 아이콘 색 구분(내 공유=파랑, 타인 공유=초록). 글 보기: 뒤로가기·제목 같은 줄, 제목 클릭 목록 복귀, 반응형 제목 overflow, 모바일 제목 다음 줄·전체 표시.
+
 ### 2026-02-14: Frontend Docker 독립 구성
 - **Frontend Docker**: frontend 폴더에 독립 구성 (Dockerfile, docker-compose.yml, docker/nginx.conf, DOCKER_DEPLOY.md). Backend Compose와 분리하여 `cd frontend && docker compose up -d` 로 단독 실행. 빌드 시 REACT_APP_API_URL=/api 주입.
 
@@ -853,7 +867,7 @@ REACT_APP_DEBUG=true
 - **DB**: 참조 무결성(CASCADE), Pydantic 검증, 로그 30일 보관·만료 세션 정리.
 - **보안**: 민감 정보 로그 미기록, 프로덕션 HTTPS 필수.
 - **성능**: 응답 시간·처리량·요약 30초·워커 3개 수치 명시.
-- **UI**: 반응형 브레이크포인트(320/768/1024), 로딩·에러·접근성, 검색 UI(선택 태그 파란색, X 버튼, 전체 제거, 북마크 목록 N개).
+- **UI**: 반응형 브레이크포인트(320/768/1024), 로딩·에러·접근성, 검색 UI(선택 태그 파란색, X 버튼, 전체 제거, 북마크 목록 N개). 공유 글 권한 UI(타인 글 수정/삭제 비노출, 공개 아이콘 색 구분). 글 보기(뒤로가기·제목 같은 줄, 제목 클릭 목록 복귀, 반응형 제목, 모바일 제목 전체 표시).
 - **환경**: 하드웨어 권장 스펙, 지원 브라우저.
 - **운영**: 로그 보관·모니터링, 배포 자동화·백업·복구·무중단, 테스트 전략(TEST-001~004).
 - **제약사항**: §1.3 추가.

@@ -63,7 +63,7 @@ api.interceptors.response.use(
             if (error.response.status === 401) {
                 // 인증 에러 처리
                 localStorage.removeItem('token');
-                window.location.href = '/login';
+                window.location.href = '/main';
             }
         } else if (error.request) {
             // 서버 응답이 없는 경우

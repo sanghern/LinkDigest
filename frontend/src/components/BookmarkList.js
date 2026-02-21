@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import AddBookmark from './AddBookmark';
 import EditBookmark from './EditBookmark';
 import BookmarkDetail from './BookmarkDetail';
@@ -15,7 +16,8 @@ const EllipsisIcon = () => (
     </svg>
 );
 
-const BookmarkList = () => {
+const BookmarkList = ({ isPublicMode = false } = {}) => {
+    const { user: currentUser } = useAuth();
     const [bookmarks, setBookmarks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -42,30 +44,29 @@ const BookmarkList = () => {
     const fetchBookmarks = useCallback(async () => {
         try {
             setLoading(true);
-            // 여러 키워드를 배열로 전달 (AND 조건으로 검색됨)
-            const tagsParam = selectedTags.length > 0 ? selectedTags : undefined;
-            
-            // 디버깅: 전달되는 파라미터 확인
-            console.log('[Frontend] fetchBookmarks 호출:', {
-                page: currentPage,
-                per_page: ITEMS_PER_PAGE,
-                tags: tagsParam,
-                selectedTags: selectedTags
-            });
-            
-            const response = await api.bookmarks.getList({
-                page: currentPage,
-                per_page: ITEMS_PER_PAGE,
-                tags: tagsParam
-            });
-            
-            const { items, total, total_pages } = response;
-            
-            setBookmarks(items);
-            setTotalItems(total);
-            setTotalPages(total_pages);
+            if (isPublicMode) {
+                const response = await api.publicBookmarks.getList({
+                    page: currentPage,
+                    per_page: ITEMS_PER_PAGE
+                });
+                const { items, total, total_pages } = response;
+                setBookmarks(items);
+                setTotalItems(total);
+                setTotalPages(total_pages);
+            } else {
+                const tagsParam = selectedTags.length > 0 ? selectedTags : undefined;
+                const response = await api.bookmarks.getList({
+                    page: currentPage,
+                    per_page: ITEMS_PER_PAGE,
+                    tags: tagsParam
+                });
+                const { items, total, total_pages } = response;
+                setBookmarks(items);
+                setTotalItems(total);
+                setTotalPages(total_pages);
+            }
         } catch (err) {
-            setError('북마크 목록을 불러오는데 실패했습니다.');
+            setError(isPublicMode ? '공개 목록을 불러오는데 실패했습니다.' : '북마크 목록을 불러오는데 실패했습니다.');
             console.error('북마크 목록 조회 실패:', err);
             setBookmarks([]);
             setTotalPages(1);
@@ -73,7 +74,7 @@ const BookmarkList = () => {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, ITEMS_PER_PAGE, selectedTags]);
+    }, [isPublicMode, currentPage, ITEMS_PER_PAGE, selectedTags]);
 
     // 페이지 변경 핸들러 개선
     const handlePageChange = (page) => {
@@ -153,13 +154,11 @@ const BookmarkList = () => {
     // eslint-disable-next-line no-unused-vars
     const handleViewClick = async (e, bookmark) => {
         e.stopPropagation();
-        if (!bookmark?.id) {
-            console.error('유효하지 않은 북마크');
-            return;
-        }
-
+        if (!bookmark?.id) return;
         try {
-            const updatedBookmark = await api.bookmarks.getById(bookmark.id);
+            const updatedBookmark = isPublicMode
+                ? await api.publicBookmarks.getById(bookmark.id)
+                : await api.bookmarks.getById(bookmark.id);
             if (updatedBookmark) {
                 setSelectedBookmark(updatedBookmark);
                 setShowDetail(true);
@@ -188,7 +187,9 @@ const BookmarkList = () => {
     const handleTitleClick = async (e, bookmark) => {
         e.preventDefault();
         try {
-            const updatedBookmark = await api.bookmarks.getById(bookmark.id);
+            const updatedBookmark = isPublicMode
+                ? await api.publicBookmarks.getById(bookmark.id)
+                : await api.bookmarks.getById(bookmark.id);
             setSelectedBookmark(updatedBookmark);
             setShowDetail(true);
         } catch (error) {
@@ -200,19 +201,19 @@ const BookmarkList = () => {
     // 북마크 목록 새로고침 함수
     const refreshBookmarks = useCallback(async () => {
         try {
-            // 토큰 유효성 먼저 확인
-            await api.auth.me();  // 현재 사용자 정보 확인
+            if (!isPublicMode) {
+                await api.auth.me();
+            }
             await fetchBookmarks();
         } catch (error) {
-            if (error.response?.status === 401) {
-                // 토큰이 만료된 경우 로그인 페이지로 리다이렉트
-                window.location.href = '/login';
+            if (!isPublicMode && error.response?.status === 401) {
+                window.location.href = '/main';
             } else {
                 console.error('북마크 목록 새로고침 실패:', error);
                 setError('북마크 목록을 새로고침하는데 실패했습니다.');
             }
         }
-    }, [fetchBookmarks]);
+    }, [isPublicMode, fetchBookmarks]);
 
     // 상세보기 닫기 핸들러 수정
     const handleDetailClose = async (openEdit = false, pageToChange = null) => {  // openEdit, pageToChange 파라미터 추가
@@ -249,6 +250,7 @@ const BookmarkList = () => {
                         currentPage={currentPage}
                         totalPages={totalPages}
                         onPageChange={handlePageChange}
+                        readOnly={isPublicMode}
                     />
                 </div>
             </div>
@@ -261,9 +263,9 @@ const BookmarkList = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-0">
                     <div className="flex items-center gap-3 flex-wrap">
                         <h1 className="text-lg sm:text-xl font-bold">
-                            북마크 요약목록{totalItems > 0 && `(${totalItems}개)`}
+                            {isPublicMode ? '공개 북마크' : '북마크 요약목록'}{totalItems > 0 && ` (${totalItems}개)`}
                         </h1>
-                        {selectedTags.length > 0 && (
+                        {!isPublicMode && selectedTags.length > 0 && (
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm text-gray-600">필터:</span>
                                 {selectedTags.map((tag, idx) => (
@@ -339,13 +341,15 @@ const BookmarkList = () => {
                                 </button>
                             </nav>
                         )}
-                        {/* 새 북마크 버튼 */}
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="bg-blue-500 text-white px-3 py-1.5 rounded hover:bg-blue-600 text-xs sm:text-sm w-full sm:w-auto order-1 sm:order-2"
-                        >
-                            새 북마크
-                        </button>
+                        {/* 새 북마크 버튼 (공개 모드에서는 미표시) */}
+                        {!isPublicMode && (
+                            <button
+                                onClick={() => setShowAddModal(true)}
+                                className="bg-blue-500 text-white px-3 py-1.5 rounded hover:bg-blue-600 text-xs sm:text-sm w-full sm:w-auto order-1 sm:order-2"
+                            >
+                                새 북마크
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -359,12 +363,22 @@ const BookmarkList = () => {
                     <div className="grid gap-3 sm:gap-4">
                         {bookmarks.map(bookmark => (
                             <div key={bookmark.id} className="bg-white rounded-lg shadow p-3 sm:p-4">
-                                {/* 북마크 제목 */}
+                                {/* 북마크 제목 (공개 상태 아이콘 + 제목 같은 라인) */}
                                 <h3 
-                                    className="text-sm sm:text-base font-semibold cursor-pointer hover:text-blue-600 break-words"
+                                    className="text-sm sm:text-base font-semibold cursor-pointer hover:text-blue-600 break-words flex items-center gap-1.5"
                                     onClick={(e) => handleTitleClick(e, bookmark)}
                                 >
-                                    {bookmark.title}
+                                    {!isPublicMode && bookmark.is_public && (
+                                        <span
+                                            className={`flex-shrink-0 ${currentUser && String(bookmark.user_id) !== String(currentUser.id) ? 'text-green-500' : 'text-blue-500'}`}
+                                            title={currentUser && String(bookmark.user_id) !== String(currentUser.id) ? '다른 사용자가 공유한 글' : '공개됨 (모든 로그인 사용자에게 공개)'}
+                                        >
+                                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </span>
+                                    )}
+                                    <span className="break-words">{bookmark.title}</span>
                                 </h3>
 
                                 {/* 메타 정보와 액션 버튼 */}
@@ -380,13 +394,11 @@ const BookmarkList = () => {
                                                         return (
                                                             <span 
                                                                 key={idx} 
-                                                                onClick={(e) => handleTagClick(e, tag)}
-                                                                className={`text-xs px-1.5 sm:px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                                                                    isSelected 
-                                                                        ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                                                                        : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                                onClick={isPublicMode ? undefined : (e) => handleTagClick(e, tag)}
+                                                                className={`text-xs px-1.5 sm:px-2 py-0.5 rounded transition-colors ${
+                                                                    isPublicMode ? 'bg-blue-100 text-blue-800' : (isSelected ? 'bg-blue-500 text-white hover:bg-blue-600 cursor-pointer' : 'bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer')
                                                                 }`}
-                                                                title={isSelected ? `${tag} 필터 제거` : `${tag} 필터 추가`}
+                                                                title={isPublicMode ? undefined : (isSelected ? `${tag} 필터 제거` : `${tag} 필터 추가`)}
                                                             >
                                                                 {tag}
                                                             </span>
@@ -404,39 +416,32 @@ const BookmarkList = () => {
                                         <span className="text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">{bookmark.source_name || '-'}</span>
                                     </div>
 
-                                    {/* 액션 버튼들 */}
+                                    {/* 액션 버튼들 (공개 모드에서는 미표시, 등록자에게만 수정/삭제) */}
                                     <div className="flex items-center space-x-2 sm:space-x-3 ml-0 sm:ml-4">
-                                        {/* 상세보기 버튼 */}
-                                        <button 
-                                            onClick={(e) => handleViewClick(e, bookmark)}
-                                            className="text-blue-600 hover:text-blue-800 p-1"
-                                            title="상세보기"
-                                        >
-                                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
-                                        </button>
-                                        {/* 수정 버튼 */}
-                                        <button 
-                                            onClick={(e) => handleEditClick(e, bookmark)}
-                                            className="text-green-600 hover:text-green-800 p-1"
-                                            title="수정"
-                                        >
-                                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        {/* 삭제 버튼 */}
-                                        <button 
-                                            onClick={(e) => handleDeleteClick(e, bookmark)}
-                                            className="text-red-600 hover:text-red-800 p-1"
-                                            title="삭제"
-                                        >
-                                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
+                                        {!isPublicMode && currentUser && String(bookmark.user_id) === String(currentUser.id) && (
+                                            <>
+                                                {/* 수정 버튼 */}
+                                                <button 
+                                                    onClick={(e) => handleEditClick(e, bookmark)}
+                                                    className="text-green-600 hover:text-green-800 p-1"
+                                                    title="수정"
+                                                >
+                                                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                {/* 삭제 버튼 */}
+                                                <button 
+                                                    onClick={(e) => handleDeleteClick(e, bookmark)}
+                                                    className="text-red-600 hover:text-red-800 p-1"
+                                                    title="삭제"
+                                                >
+                                                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>

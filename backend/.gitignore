@@ -1,7 +1,10 @@
-# 환경 변수 파일 (민감한 정보 포함)
+# 환경 변수 파일 (민감한 정보 포함 - Git 제외 필수)
 .env
+.env.docker
 .env.local
 .env.*.local
+!.env.docker.example
+!.env*.example
 
 # Python
 __pycache__/

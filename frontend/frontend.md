@@ -24,10 +24,11 @@ frontend/
 ├── src/
 │   ├── components/             # React 컴포넌트
 │   │   ├── AddBookmark.js      # 북마크 추가 컴포넌트
-│   │   ├── BookmarkList.js     # 북마크 목록 컴포넌트
-│   │   ├── BookmarkDetail.js   # 북마크 상세보기 컴포넌트
+│   │   ├── BookmarkList.js     # 북마크 목록 컴포넌트 (인증/공개 모드 지원)
+│   │   ├── BookmarkDetail.js   # 북마크 상세보기 컴포넌트 (readOnly=공개 보기)
 │   │   ├── EditBookmark.js     # 북마크 수정 컴포넌트
 │   │   ├── DeleteBookmark.js   # 북마크 삭제 컴포넌트
+│   │   ├── Main.js             # 첫 화면: 공개 북마크 목록 (인증 불필요)
 │   │   ├── Login.js            # 로그인 컴포넌트
 │   │   ├── Navigation.js       # 네비게이션 바 컴포넌트
 │   │   ├── ProtectedRoute.js   # 인증 보호 라우트 컴포넌트
@@ -99,6 +100,7 @@ frontend/
 
 ### 2. 북마크 관리
 
+- **공개 북마크 (첫 화면)**: 비로그인 사용자는 `/main`에서 `is_public=True` 북마크 목록을 로그인 후 목록과 동일한 카드/페이지네이션 UI로 조회. 제목 클릭 시 상세는 요약만 표시(컨텐츠 버튼 없음). `api.publicBookmarks` 전용 호출, 인증 없음.
 - **북마크 목록**: 페이지네이션 지원
 - **북마크 추가**: URL 입력으로 자동 스크래핑
 - **북마크 수정**: 제목, URL, 태그, 요약 수정
@@ -251,10 +253,13 @@ npm test
 - ErrorBoundary를 통한 에러 처리
 
 **라우트:**
-- `/login`: 로그인 페이지
-- `/` 또는 `/bookmarks`: 북마크 목록 페이지
+- `/main`: 첫 화면 (공개 북마크 목록, 인증 불필요). 로그인 시 `/`로 리다이렉트.
+- `/login`: 로그인 페이지. 로그인 폼 없이 접근 시 `/main`으로 리다이렉트. "로그인" 버튼 클릭 시 `/login?form=1`로 이동해 폼 표시.
+- `/` 또는 `/bookmarks`: 북마크 목록 페이지 (인증 필요)
 - `/add-bookmark`: 북마크 추가 페이지
 - `/logs`: 로그 뷰어 페이지
+- 알 수 없는 경로(`*`): `/main`으로 리다이렉트
+- 401 발생 시: `/main`으로 리다이렉트 (공개 API 요청 시 skipAuth로 리다이렉트 방지)
 
 ### AuthContext.js
 
@@ -278,42 +283,44 @@ const MyComponent = () => {
 
 ### api.js
 
-백엔드 API와 통신하는 유틸리티 모듈입니다.
+백엔드 API와 통신하는 유틸리티 모듈입니다. **공개용 API**와 **인증용 API**를 구분하여 정의·사용합니다.
 
 **주요 기능:**
 - Axios 인스턴스 생성 및 설정
-- 요청/응답 인터셉터 설정
-- JWT 토큰 자동 추가
-- 401 에러 시 자동 로그아웃
+- 요청/응답 인터셉터: JWT 자동 추가(인증용), 401 시 `/main` 리다이렉트(skipAuth 요청은 제외)
 - 커스텀 `paramsSerializer`: FastAPI 배열 쿼리 파라미터 형식 지원 (`tags=AI&tags=코딩`)
+- `getPublicApiPrefix()`: baseURL에 `/api` 없을 때 경로 보정
 
-**API 엔드포인트:**
-- `auth.login()`: 로그인
-- `auth.logout()`: 로그아웃
-- `auth.me()`: 현재 사용자 정보 조회
-- `bookmarks.create()`: 북마크 생성 (선택: `summary_model` 요약 모델 지정)
-- `bookmarks.getSummaryModels()`: 요약에 사용 가능한 모델 목록 조회
-- `bookmarks.getList()`: 북마크 목록 조회
-- `bookmarks.update()`: 북마크 수정
-- `bookmarks.delete()`: 북마크 삭제
-- `bookmarks.getDetail()`: 북마크 상세 조회
-- `bookmarks.increaseReadCount()`: 조회수 증가
-- `bookmarks.share()`: 북마크 공유 (Slack/Notion)
-- `logs.getList()`: 로그 목록 조회
-- `logs.getStats()`: 로그 통계 조회
-- `logs.save()`: 로그 저장
+**공개용 API (인증 불필요, skipAuth):**
+- `publicBookmarks.getList({ page, per_page })`: 공개 북마크 목록 — `GET /api/public/bookmarks/`
+- `publicBookmarks.getById(id)`: 공개 북마크 단건 — `GET /api/public/bookmarks/{id}`
+
+**인증용 API (JWT 필요):**
+- `auth.login()`, `auth.logout()`, `auth.me()`: 로그인/로그아웃/현재 사용자
+- `bookmarks.create()`, `bookmarks.getSummaryModels()`, `bookmarks.getList()`, `bookmarks.getById()`, `bookmarks.getBookmark()`, `bookmarks.update()`, `bookmarks.delete()`, `bookmarks.increaseReadCount()`, `bookmarks.share()`
+- `logs.getList()`, `logs.getStats()`, `logs.save()`
+
+### Main.js
+
+첫 화면용 컴포넌트입니다. 비로그인 사용자에게 공개 북마크 목록을 로그인 후 목록과 동일한 UI로 표시합니다.
+
+**주요 기능:**
+- 로그인한 사용자: `/`로 리다이렉트
+- 비로그인: `<BookmarkList isPublicMode />` 렌더 — 공개 북마크만 표시, 추가/수정/삭제·태그 필터 버튼 미표시
+- 상단 네비: "Link Digest" → `/main`, "로그인" 버튼 → `/login?form=1`
 
 ### BookmarkList.js
 
-북마크 목록을 표시하는 메인 컴포넌트입니다.
+북마크 목록을 표시하는 메인 컴포넌트입니다. **인증 모드**와 **공개 모드**(`isPublicMode`)를 지원합니다.
 
 **주요 기능:**
-- 북마크 목록 조회 및 표시
+- 북마크 목록 조회 및 표시 (인증 시 `api.bookmarks.getList`, 공개 시 `api.publicBookmarks.getList`)
 - 페이지네이션 (상단/하단)
-- 북마크 추가/수정/삭제 모달 관리
-- 북마크 상세보기 (인라인 표시)
-- 태그 표시 및 다중 키워드 필터 검색
+- 북마크 추가/수정/삭제 모달 관리 (공개 모드에서는 미표시)
+- 북마크 상세보기 (인라인 표시, 공개 모드에서는 `api.publicBookmarks.getById` 사용, `BookmarkDetail`에 `readOnly` 전달)
+- 태그 표시 및 다중 키워드 필터 검색 (공개 모드에서는 태그 필터 비활성)
 - 반응형 디자인 (모바일/PC 최적화)
+- **공유 글 구분**: 등록자에게만 수정·삭제 아이콘 표시. 다른 사용자가 공유한 글은 수정/삭제 버튼 비노출. 공개 아이콘 색상으로 구분(내가 공유한 글=파란색, 다른 사용자 공유 글=초록색).
 
 **상태 관리:**
 - `bookmarks`: 북마크 목록
@@ -336,13 +343,17 @@ const MyComponent = () => {
 
 ### BookmarkDetail.js
 
-북마크 상세 정보를 표시하는 컴포넌트입니다.
+북마크 상세 정보를 표시하는 컴포넌트입니다. **readOnly**(공개 보기) 모드 지원.
 
 **주요 기능:**
 - 마크다운 형식으로 콘텐츠 렌더링
-- 요약/원본 콘텐츠 전환
+- **일반 모드**: 요약/원본 콘텐츠 전환 버튼(요약·컨텐츠)
+- **readOnly 모드**(공개 북마크 보기): 요약만 표시, 컨텐츠 버튼 제거. 조회수 증가·요약 폴링 미실행.
 - 이미지 및 링크 자동 렌더링
-- 조회수 증가
+- 조회수 증가 (readOnly가 아닐 때만)
+- **권한별 UI**: 등록자에게만 수정·공유 버튼 표시. 다른 사용자가 공유한 글은 수정/공유 버튼 비노출.
+- **글 보기 레이아웃**: 뒤로가기(<) 아이콘과 제목을 같은 라인에 표시. 제목 클릭 시에도 목록으로 복귀.
+- **반응형**: 긴 제목은 폼 밖으로 넘치지 않도록 overflow 처리. 모바일에서는 돌아가기·공유 아이콘 다음 줄에 제목 표시. 모바일 내용보기에서는 제목 전체 출력(목록보기는 제목 전체 출력 유지).
 
 **사용 라이브러리:**
 - `react-markdown`: 마크다운 렌더링
@@ -372,9 +383,10 @@ const MyComponent = () => {
 인증이 필요한 라우트를 보호하는 컴포넌트입니다.
 
 **동작 방식:**
-- 사용자가 로그인하지 않았으면 `/login`으로 리다이렉트
+- 사용자가 로그인하지 않았으면 `/login`으로 리다이렉트 (보호된 경로 접근 시)
 - 로딩 중이면 로딩 메시지 표시
 - 인증된 사용자만 자식 컴포넌트 렌더링
+- 401 응답 시 앱 전역에서 `/main`으로 리다이렉트 (api.js 인터셉터)
 
 ### ErrorBoundary.js
 
@@ -699,6 +711,18 @@ try {
 ---
 
 ## 수정 이력
+
+### 2026-02-12: 공유 글 권한 UI 및 글 보기 반응형
+
+**공유 글 권한:**
+- 다른 사용자가 공유한 글은 삭제·수정 불가. 목록과 글 보기에서 수정·삭제 아이콘은 등록자에게만 표시(BookmarkList: `bookmark.user_id === currentUser.id`, BookmarkDetail: `isOwner`).
+- 글 보기에서 공유 버튼도 등록자에게만 표시.
+- 목록에서 공개 아이콘 색상 구분: 내가 공유한 글=파란색, 다른 사용자 공유 글=초록색.
+
+**글 보기 UI:**
+- 뒤로가기(<) 아이콘과 제목을 같은 라인에 표시. 제목 클릭 시 목록으로 복귀.
+- 반응형: 긴 제목이 폼 밖으로 넘치지 않도록 overflow·말줄임 처리(sm 이상 한 줄 말줄임).
+- 모바일: 돌아가기·공유 아이콘 다음 줄에 제목 표시(flex-col). 모바일 내용보기에서 제목 전체 출력(break-words, 말줄임 제거).
 
 ### 2026-02-12: 북마크 상세보기 UI 개선
 
@@ -1881,6 +1905,6 @@ const fetchBookmarks = useCallback(async () => {
 
 ---
 
-**문서 버전**: 1.1  
-**최종 업데이트**: 2026-02-14  
+**문서 버전**: 1.2  
+**최종 업데이트**: 2026-02-12  
 **작성자**: LinkDigest 개발팀

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
+    const [searchParams] = useSearchParams();
+    const showForm = searchParams.get('form') === '1';
     const [credentials, setCredentials] = useState({
         username: '',
         password: ''
@@ -21,6 +23,11 @@ const Login = () => {
 
     if (user) {
         return <Navigate to="/" replace />;
+    }
+
+    // 로그인 폼 없이 /login 접근 시 첫 화면(main)으로
+    if (!showForm) {
+        return <Navigate to="/main" replace />;
     }
 
     const handleSubmit = async (e) => {
@@ -58,7 +65,7 @@ const Login = () => {
                             d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
                         />
                     </svg>
-                    <h1 className="text-3xl font-bold text-gray-800">LinkDigest</h1>
+                    <h1 className="text-2xl font-bold text-gray-800">Link Digest</h1>
                 </div>
             </div>
 

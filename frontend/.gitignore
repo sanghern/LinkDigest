@@ -1,9 +1,13 @@
-# 환경 변수 파일 (민감한 정보 포함)
+# 환경 변수 파일 (민감한 정보 포함 - Git 제외 필수)
 .env
+.env.docker
 .env.local
+.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local
+!.env.docker.example
+!.env*.example
 
 # 의존성
 node_modules/

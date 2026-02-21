@@ -88,6 +88,56 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             .filter(Bookmark.user_id == owner_id)\
             .count()
 
+    def _visible_to_user_filter(self, owner_id: int):
+        """본인 소유 또는 is_public=True인 북마크만 보이도록 하는 조건."""
+        return or_(Bookmark.user_id == owner_id, Bookmark.is_public == True)
+
+    def get_multi_visible_to_user(
+        self, db: Session, *, owner_id: int, skip: int = 0, limit: int = 100
+    ) -> List[Bookmark]:
+        """로그인 사용자에게 보일 북마크 목록: 본인 소유 + is_public=True."""
+        return db.query(self.model)\
+            .filter(self._visible_to_user_filter(owner_id))\
+            .order_by(Bookmark.created_at.desc())\
+            .offset(skip)\
+            .limit(limit)\
+            .all()
+
+    def count_visible_to_user(self, db: Session, *, owner_id: int) -> int:
+        """로그인 사용자에게 보일 북마크 개수: 본인 소유 + is_public=True."""
+        return db.query(self.model)\
+            .filter(self._visible_to_user_filter(owner_id))\
+            .count()
+
+    def get_multi_public(
+        self, db: Session, *, skip: int = 0, limit: int = 100
+    ) -> List[Bookmark]:
+        """비로그인 사용자용: is_public=True인 북마크만 조회."""
+        return db.query(self.model)\
+            .filter(Bookmark.is_public == True, Bookmark.is_deleted == False)\
+            .order_by(Bookmark.created_at.desc())\
+            .offset(skip)\
+            .limit(limit)\
+            .all()
+
+    def count_public(self, db: Session) -> int:
+        """is_public=True인 북마크 개수."""
+        return db.query(self.model)\
+            .filter(Bookmark.is_public == True, Bookmark.is_deleted == False)\
+            .count()
+
+    def get_public_by_id(
+        self, db: Session, *, bookmark_id
+    ) -> Optional[Bookmark]:
+        """비로그인 사용자용: is_public=True인 북마크 단건 조회 (bookmark_id: UUID)."""
+        return db.query(self.model)\
+            .filter(
+                Bookmark.id == bookmark_id,
+                Bookmark.is_public == True,
+                Bookmark.is_deleted == False,
+            )\
+            .first()
+
     def get_by_owner_and_url(
         self, db: Session, *, owner_id, url: str
     ) -> Optional[Bookmark]:
@@ -268,7 +318,7 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             return []
         
         query = db.query(self.model)\
-            .filter(Bookmark.user_id == owner_id)\
+            .filter(self._visible_to_user_filter(owner_id))\
             .filter(Bookmark.tags.isnot(None))\
             .filter(func.array_length(Bookmark.tags, 1) > 0)
         
@@ -358,7 +408,7 @@ class CRUDBookmark(CRUDBase[Bookmark, BookmarkCreate, BookmarkUpdate]):
             return 0
         
         query = db.query(self.model)\
-            .filter(Bookmark.user_id == owner_id)\
+            .filter(self._visible_to_user_filter(owner_id))\
             .filter(Bookmark.tags.isnot(None))\
             .filter(func.array_length(Bookmark.tags, 1) > 0)
         

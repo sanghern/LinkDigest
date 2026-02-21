@@ -4,16 +4,20 @@ import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { formatDate } from '../utils/dateUtils';
 import api from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from './LoadingSpinner';
 
-const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChange }) => {
-    // showContent의 초기값 설정을 안전하게 처리
+const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChange, readOnly = false }) => {
+    const { user: currentUser } = useAuth();
+    // showContent: readOnly면 항상 요약만, 아니면 요약/컨텐츠 토글
     const [showContent, setShowContent] = useState(() => {
         if (!bookmark) return true;
+        if (readOnly) return false;  // 공개 보기에서는 항상 요약만
         return !bookmark.summary || bookmark.summary === '요약 생성 중...';
     });
     
     const [currentBookmark, setCurrentBookmark] = useState(bookmark);
+    const isOwner = !readOnly && currentUser && currentBookmark && String(currentBookmark.user_id) === String(currentUser.id);
     const [isLoading, setIsLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const readCountIncreasedRef = useRef(null); // 현재 조회수 증가한 북마크 ID
@@ -23,6 +27,7 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
     const [showShareModal, setShowShareModal] = useState(false);
     const [showShareSuccessModal, setShowShareSuccessModal] = useState(false);
     const [shareSuccessTitle, setShareSuccessTitle] = useState('');
+    const [shareSuccessTarget, setShareSuccessTarget] = useState('');
     const [shareError, setShareError] = useState('');
     const [isSharing, setIsSharing] = useState(false);
 
@@ -33,23 +38,19 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
         }
     }, [bookmark, currentBookmark?.id]);
 
-    // bookmark.id가 변경될 때만 조회수 증가 (컴포넌트 인스턴스당 한 번만, 중복 실행 방지)
+    // bookmark.id가 변경될 때만 조회수 증가 (readOnly가 아닐 때만, 로그인 사용자 상세보기용)
     useEffect(() => {
-        // bookmark.id가 있고, 이전에 증가시킨 ID와 다르고, 현재 증가 중이 아닌 경우에만 실행
+        if (readOnly) return;
         if (bookmark?.id && readCountIncreasedRef.current !== bookmark.id && !isIncreasingRef.current) {
-            isIncreasingRef.current = true; // 증가 중 플래그 설정
+            isIncreasingRef.current = true;
             const increaseReadCount = async () => {
                 try {
-                    console.log(`조회수 증가 시작: ${bookmark.id}`);
                     await api.bookmarks.increaseReadCount(bookmark.id);
-                    readCountIncreasedRef.current = bookmark.id; // 조회수 증가 완료 표시
-                    console.log(`조회수 증가 완료: ${bookmark.id}`);
+                    readCountIncreasedRef.current = bookmark.id;
                 } catch (error) {
                     console.error('조회수 증가 실패:', error);
-                    // 에러 발생 시 플래그 리셋하여 재시도 가능하도록
                     isIncreasingRef.current = false;
                 } finally {
-                    // 성공/실패 관계없이 플래그 리셋 (단, 성공한 경우는 readCountIncreasedRef로 추적)
                     if (readCountIncreasedRef.current === bookmark.id) {
                         isIncreasingRef.current = false;
                     }
@@ -57,50 +58,38 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
             };
             increaseReadCount();
         }
-    }, [bookmark?.id]); // bookmark.id만 의존성으로 사용
+    }, [readOnly, bookmark?.id]);
 
-    // 요약 상태 확인 및 업데이트
+    // 요약 상태 확인 및 업데이트 (readOnly일 때는 폴링 없이 전달된 bookmark만 사용)
     useEffect(() => {
+        if (readOnly) return;
         let intervalId;
-        
         const checkSummary = async () => {
             if (!currentBookmark?.summary || currentBookmark.summary === '요약 생성 중...') {
                 setIsLoading(true);
                 try {
                     const response = await api.bookmarks.getBookmark(currentBookmark.id);
-                    if (!response) {
-                        console.error('북마크 정보를 가져올 수 없음');
-                        return;
-                    }
-                    
+                    if (!response) return;
                     setCurrentBookmark(response);
-                    
-                    // 요약이 완료되면 인터벌 중지 및 로딩 상태 해제
                     if (response.summary && response.summary !== '요약 생성 중...') {
                         clearInterval(intervalId);
                         setIsLoading(false);
-                        setShowContent(false);  // 요약 보기로 전환
+                        setShowContent(false);
                     }
                 } catch (error) {
                     console.error('요약 상태 확인 실패:', error);
-                    // 에러 발생 시에도 인터벌은 유지하고 로딩 상태만 해제
                     setIsLoading(false);
                 }
             }
         };
-
-        // 북마크 ID가 있을 때만 인터벌 시작
         if (currentBookmark?.id) {
-            checkSummary();  // 최초 1회 실행
+            checkSummary();
             intervalId = setInterval(checkSummary, 2000);
         }
-        
         return () => {
-            if (intervalId) {
-                clearInterval(intervalId);
-            }
+            if (intervalId) clearInterval(intervalId);
         };
-    }, [currentBookmark?.id, currentBookmark?.summary]);
+    }, [readOnly, currentBookmark?.id, currentBookmark?.summary]);
 
     // 리스트로 돌아가기 핸들러
     const handleClose = () => {
@@ -125,15 +114,23 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
         setShowShareModal(true);
     };
 
-    // 공유 실행 (Slack 또는 Notion 선택 후)
-    const handleShareSubmit = async (target) => {
+    // 공유 실행 (Slack / Notion / Users 공개·비공개)
+    const handleShareSubmit = async (target, publicValue = undefined) => {
         if (!currentBookmark?.id || isSharing) return;
         setShareError('');
         setIsSharing(true);
         try {
-            const res = await api.bookmarks.share(currentBookmark.id, target);
+            const res = await api.bookmarks.share(currentBookmark.id, target, publicValue);
             setShowShareModal(false);
-            setShareSuccessTitle(res.title || currentBookmark.title || '');
+            if (target === 'users' && publicValue === false) {
+                setCurrentBookmark(prev => (prev ? { ...prev, is_public: false } : prev));
+                setShareSuccessTarget('users-off');
+                setShareSuccessTitle('');
+            } else {
+                setShareSuccessTarget(target);
+                setShareSuccessTitle(res.title || currentBookmark.title || '');
+                if (target === 'users') setCurrentBookmark(prev => (prev ? { ...prev, is_public: true } : prev));
+            }
             setShowShareSuccessModal(true);
         } catch (err) {
             const message = err.response?.data?.detail || err.message || '공유에 실패했습니다.';
@@ -165,29 +162,43 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
     return (
         <div className="bg-white rounded-lg shadow-xl w-full flex flex-col">
             {/* 상단 섹션: 뒤로가기 버튼과 페이지네이션을 같은 라인에 배치 */}
-            <div className="flex-none px-3 sm:px-6 lg:px-8 xl:px-10 py-3 sm:py-4 border-b border-gray-200">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-3 sm:gap-0">
-                    {/* 왼쪽: 리스트로 돌아가기 + 공유 버튼 */}
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                        <button 
-                            onClick={handleClose} 
-                            className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                            title="리스트로 돌아가기"
-                            aria-label="리스트로 돌아가기"
+            <div className="flex-none px-3 sm:px-6 lg:px-8 xl:px-10 py-3 sm:py-4 border-b border-gray-200 overflow-hidden">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-3 sm:gap-0 min-w-0">
+                    {/* 왼쪽: 모바일=아이콘 다음 줄에 제목, sm이상=아이콘+제목 같은 라인 */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 min-w-0 flex-1 overflow-hidden w-full sm:w-auto">
+                        {/* 1행(모바일): 돌아가기 + 공유 아이콘 */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                            <button 
+                                onClick={handleClose} 
+                                className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                                title="리스트로 돌아가기"
+                                aria-label="리스트로 돌아가기"
+                            >
+                                <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" strokeWidth="2.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                                </svg>
+                            </button>
+                            {isOwner && (
+                                <button 
+                                    onClick={handleShareClick} 
+                                    className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 shadow border border-gray-200 hover:border-gray-300 transition-all duration-200"
+                                    title="공유"
+                                    aria-label="공유"
+                                >
+                                    <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+                        {/* 2행(모바일) / 같은 라인(sm이상): 제목 - 모바일은 전체 출력, sm이상은 한 줄 말줄임 */}
+                        <button
+                            type="button"
+                            onClick={handleClose}
+                            className="text-base sm:text-xl font-semibold text-gray-800 text-left w-full sm:min-w-0 sm:flex-1 hover:text-blue-600 transition-colors cursor-pointer max-w-full break-words sm:overflow-hidden sm:text-ellipsis sm:whitespace-nowrap"
+                            title={currentBookmark.title || '리스트로 돌아가기'}
                         >
-                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" strokeWidth="2.5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                            </svg>
-                        </button>
-                        <button 
-                            onClick={handleShareClick} 
-                            className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 shadow border border-gray-200 hover:border-gray-300 transition-all duration-200"
-                            title="공유"
-                            aria-label="공유"
-                        >
-                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                            </svg>
+                            <span className="block break-words sm:overflow-hidden sm:text-ellipsis sm:whitespace-nowrap">{currentBookmark.title}</span>
                         </button>
                     </div>
 
@@ -238,11 +249,8 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                     )}
                 </div>
 
-                {/* 제목 및 메타 정보 */}
+                {/* 메타 정보 */}
                 <div className="space-y-2">
-                    <div className="flex justify-between items-start">
-                        <h2 className="text-base sm:text-xl font-semibold text-gray-800 break-words pr-2">{currentBookmark.title}</h2>
-                    </div>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 text-xs sm:text-sm text-gray-500">
                         {/* 왼쪽: 메타 정보 */}
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -251,45 +259,47 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                             <span className="truncate max-w-[150px] sm:max-w-none">{currentBookmark.source_name || '-'}</span>
                         </div>
                         
-                        {/* 오른쪽: 버튼들 */}
+                        {/* 오른쪽: 버튼들 (공개 보기에서는 요약/컨텐츠 토글 미표시) */}
                         <div className="flex items-center space-x-1 sm:space-x-2 w-full sm:w-auto">
-                            {/* 요약/컨텐츠 토글 버튼 */}
-                            <div className="inline-flex rounded-lg shadow-sm flex-1 sm:flex-none">
-                                <button 
-                                    onClick={() => setShowContent(false)}
-                                    className={`px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-l-lg border flex-1 sm:flex-none
-                                        ${!showContent 
-                                            ? 'bg-blue-50 text-blue-600 border-blue-600' 
-                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                                    disabled={isLoading}
-                                >
-                                    <span className="hidden sm:inline">요약 {isLoading ? '(로딩중...)' : !currentBookmark.summary && '(클릭하여 확인)'}</span>
-                                    <span className="sm:hidden">요약</span>
-                                </button>
-                                <button 
-                                    onClick={() => setShowContent(true)}
-                                    className={`px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-r-lg border-t border-r border-b flex-1 sm:flex-none
-                                        ${showContent 
-                                            ? 'bg-blue-50 text-blue-600 border-blue-600' 
-                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                                >
-                                    컨텐츠
-                                </button>
-                            </div>
+                            {!readOnly && (
+                                <div className="inline-flex rounded-lg shadow-sm flex-1 sm:flex-none">
+                                    <button 
+                                        onClick={() => setShowContent(false)}
+                                        className={`px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-l-lg border flex-1 sm:flex-none
+                                            ${!showContent 
+                                                ? 'bg-blue-50 text-blue-600 border-blue-600' 
+                                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                                        disabled={isLoading}
+                                    >
+                                        <span className="hidden sm:inline">요약 {isLoading ? '(로딩중...)' : !currentBookmark.summary && '(클릭하여 확인)'}</span>
+                                        <span className="sm:hidden">요약</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setShowContent(true)}
+                                        className={`px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-r-lg border-t border-r border-b flex-1 sm:flex-none
+                                            ${showContent 
+                                                ? 'bg-blue-50 text-blue-600 border-blue-600' 
+                                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        컨텐츠
+                                    </button>
+                                </div>
+                            )}
 
-                            {/* 구분선 */}
-                            <div className="h-4 w-px bg-gray-300 mx-1 sm:mx-2 hidden sm:block"></div>
-
-                            {/* 수정 버튼 */}
-                            <button 
-                                onClick={handleEditClick}
-                                className="text-green-600 hover:text-green-800 p-1"
-                                title="수정"
-                            >
-                                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                            </button>
+                            {isOwner && (
+                                <>
+                                    <div className="h-4 w-px bg-gray-300 mx-1 sm:mx-2 hidden sm:block"></div>
+                                    <button 
+                                        onClick={handleEditClick}
+                                        className="text-green-600 hover:text-green-800 p-1"
+                                        title="수정"
+                                    >
+                                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                     {bookmark.tags && bookmark.tags.length > 0 && (
@@ -357,9 +367,11 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                             },
                         }}
                     >
-                        {showContent 
-                            ? (currentBookmark.content || '컨텐츠가 없습니다.') 
-                            : (currentBookmark.summary || '요약이 생성중입니다...')}
+                        {readOnly
+                            ? (currentBookmark.summary || '요약이 없습니다.')
+                            : (showContent 
+                                ? (currentBookmark.content || '컨텐츠가 없습니다.') 
+                                : (currentBookmark.summary || '요약이 생성중입니다...'))}
                     </ReactMarkdown>
                 </div>
             </div>
@@ -445,6 +457,14 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                                 <button
                                     type="button"
                                     disabled={isSharing}
+                                    onClick={() => handleShareSubmit('users', currentBookmark?.is_public ? false : undefined)}
+                                    className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm disabled:opacity-50 ${currentBookmark?.is_public ? 'bg-gray-500 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                >
+                                    {currentBookmark?.is_public ? '공유 중' : 'Users'}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isSharing}
                                     onClick={() => handleShareSubmit('slack')}
                                     className="px-4 py-2 text-sm font-medium text-white bg-[#4A154B] border border-transparent rounded-md shadow-sm hover:bg-[#3d1240] disabled:opacity-50"
                                 >
@@ -509,7 +529,11 @@ const BookmarkDetail = ({ bookmark, onClose, currentPage, totalPages, onPageChan
                                     </svg>
                                 </div>
                                 <p className="ml-3 text-gray-700">
-                                    {shareSuccessTitle ? `"${shareSuccessTitle}"(이)가 공유되었습니다.` : '공유되었습니다.'}
+                                    {shareSuccessTarget === 'users'
+                                        ? '모든 로그인 사용자에게 공개되었습니다.'
+                                        : shareSuccessTarget === 'users-off'
+                                        ? '비공개로 전환되었습니다.'
+                                        : shareSuccessTitle ? `"${shareSuccessTitle}"(이)가 공유되었습니다.` : '공유되었습니다.'}
                                 </p>
                             </div>
                         </div>

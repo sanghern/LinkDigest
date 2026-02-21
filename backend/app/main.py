@@ -23,7 +23,7 @@ except Exception as e:
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="LinkDigest API - 북마크 관리 및 AI 요약 서비스",
+    description="Link Digest API - 북마크 관리 및 AI 요약 서비스",
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",  # Swagger UI 경로

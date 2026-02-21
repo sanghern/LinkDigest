@@ -19,5 +19,6 @@ class Bookmark(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     is_deleted = Column(Boolean, default=False)
     tags = Column(ARRAY(String))
-    catergory = Column(String)
-    read_count = Column(Integer, default=0, nullable=False) 
+    category = Column(String(100))
+    read_count = Column(Integer, default=0, nullable=False)
+    is_public = Column(Boolean, default=False, nullable=False)

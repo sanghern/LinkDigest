@@ -47,23 +47,27 @@ def extract_category_keywords(text):
     - 📌 키워드: 값
     - 📌 **키워드**: 값 / 📌 **키워드:** 값
     """
-    # 분류 추출 - 다양한 형식 지원
-    # 지원 형식: 📌️ 분류: / 📌️ **분류**: / 📌️ **분류:** (콜론이 볼드 안에 있는 경우)
+    # 분류 추출 - 다양한 형식 지원 (📌 또는 📌️ 둘 다 지원)
     category_patterns = [
-        r'📌️\s*\*\*분류:\*\*\s*([^\n]+?)(?:\s*\n|\s+📌|$)',   # 📌️ **분류:** 블로그
-        r'📌️\s*\*\*분류\*\*:\s*([^\n]+?)(?:\s*\n|\s+📌|$)',   # 📌️ **분류**: 블로그
+        r'📌\s*분류:\s*([^\n]+?)(?:\s*\n|\s+📌|$)',             # 📌 분류: 블로그
+        r'📌\s*\*\*분류:\*\*\s*([^\n]+?)(?:\s*\n|\s+📌|$)',     # 📌 **분류:** 블로그
+        r'📌\s*\*\*분류\*\*:\s*([^\n]+?)(?:\s*\n|\s+📌|$)',     # 📌 **분류**: 블로그
+        r'📌️\s*\*\*분류:\*\*\s*([^\n]+?)(?:\s*\n|\s+📌|$)',
+        r'📌️\s*\*\*분류\*\*:\s*([^\n]+?)(?:\s*\n|\s+📌|$)',
         r'📌️\s*분류:\s*([^\n]+?)(?:\s*\n|\s+📌|$)',
+        r'📌\s*\*\*분류\*\*\s+([^\n]+?)(?:\s*\n|\s+📌|$)',
         r'📌️\s*\*\*분류\*\*\s+([^\n]+?)(?:\s*\n|\s+📌|$)',
+        r'📌\s*분류\s+([^\n]+?)(?:\s*\n|\s+📌|$)',
         r'📌️\s*분류\s+([^\n]+?)(?:\s*\n|\s+📌|$)',
     ]
     
-    catergory = ""
+    category = ""
     for pattern in category_patterns:
         category_match = re.search(pattern, text, re.MULTILINE)
         if category_match:
-            catergory = category_match.group(1).strip().replace('*', '')
+            category = category_match.group(1).strip().replace('*', '').replace('`', '')
             break
-    
+
     # 키워드 추출 - 다양한 형식 지원
     # 지원 형식: 📌 키워드: / 📌 **키워드**: / 📌 **키워드:** (콜론이 볼드 안에 있는 경우)
     keyword_patterns = [
@@ -82,10 +86,10 @@ def extract_category_keywords(text):
             break
     
     # 앞뒤 공백 한번 더 제거
-    catergory = catergory.strip()
+    category = category.strip()
     keywords = keywords.strip()
-    
-    return catergory, keywords
+
+    return category, keywords
 
 def fix_markdown_heading_duplicates(text: str) -> str:
     """
@@ -136,12 +140,12 @@ def update_bookmark_summary(bookmark_id: str, content: str, model: str = None):
         # 요약 본문에서도 마크다운 헤딩 중복 보정 (LLM이 ### ### 등으로 출력한 경우)
         summary = fix_markdown_heading_duplicates(summary)
 
-        catergory, keywords = extract_category_keywords(summary)
-        logger.info(f"분류: {catergory}, 키워드: {keywords}")
+        category, keywords = extract_category_keywords(summary)
+        logger.info(f"분류: {category}, 키워드: {keywords}")
 
         # DB 업데이트 (성공한 경우만)
         bookmark.summary = summary
-        bookmark.catergory = catergory
+        bookmark.category = category
         if keywords:
             keyword_list = [t for k in keywords.split(',') if (t := k.strip().replace('*', '').replace('`', '').replace(':', '').replace(' ', '').strip())]
             bookmark.tags = keyword_list

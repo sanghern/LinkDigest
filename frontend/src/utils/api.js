@@ -19,6 +19,12 @@ const getApiBaseURL = () => {
     return '/api';  // .env 파일에 값이 없을 때만 기본값 사용
 };
 
+/** 공개 API 경로 prefix (인증 불필요). baseURL에 /api 없을 때 /api 붙임 */
+const getPublicApiPrefix = () => {
+    const base = getApiBaseURL();
+    return (base.endsWith('/api') || base.endsWith('/api/')) ? '' : '/api';
+};
+
 // FastAPI 배열 쿼리 파라미터 형식에 맞게 변환하는 함수
 // tags=AI&tags=코딩 형식으로 변환 (기본값: tags[]=AI&tags[]=코딩)
 const paramsSerializer = (params) => {
@@ -75,6 +81,7 @@ const handleApiError = (error) => {
 // 요청 인터셉터
 axiosInstance.interceptors.request.use(
     (config) => {
+        if (config.skipAuth) return config;
         const token = localStorage.getItem('token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -90,16 +97,35 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 && !error.config?.skipAuth) {
             localStorage.removeItem('token');
-            window.location.href = '/login';
+            window.location.href = '/main';
         }
         return Promise.reject(error);
     }
 );
 
 const api = {
-    // Auth
+    // ---------- 공개용 API (인증 불필요, skipAuth) ----------
+    publicBookmarks: {
+        getList: async ({ page = 1, per_page = 10 } = {}) => {
+            const prefix = getPublicApiPrefix();
+            const response = await axiosInstance.get(`${prefix}/public/bookmarks/`, {
+                params: { page, per_page },
+                skipAuth: true
+            });
+            return response.data;
+        },
+        getById: async (id) => {
+            const prefix = getPublicApiPrefix();
+            const response = await axiosInstance.get(`${prefix}/public/bookmarks/${id}`, {
+                skipAuth: true
+            });
+            return response.data;
+        },
+    },
+
+    // ---------- 인증용 API (토큰 필요) ----------
     auth: {
         login: async (username, password) => {
             try {
@@ -183,40 +209,31 @@ const api = {
 
         getList: async ({ page, per_page, tags }) => {
             const params = { page, per_page };
-            // 여러 태그를 배열로 전달 (FastAPI Query 파라미터 배열 형식)
             if (tags && tags.length > 0) {
                 params.tags = tags;
             }
-            
-            // 디버깅: 전달되는 파라미터 확인
-            console.log('[Frontend API] getList 호출:', params);
-            
-            const response = await axiosInstance.get('/bookmarks/', {
-                params
-            });
-            
-            // 디버깅: 실제 요청 URL 확인
-            console.log('[Frontend API] 실제 요청 URL:', response.config.url);
-            
+            const response = await axiosInstance.get('/bookmarks/', { params });
             return response.data;
         },
 
         update: async (id, data) => {
             try {
-                // URL 문자열 정규화 및 검증
-                let validUrl;
-                try {
-                    // URL 객체로 변환하여 유효성 검사
-                    const urlObject = new URL(data.url.startsWith('http') ? data.url : `https://${data.url}`);
-                    validUrl = urlObject.toString(); // 정규화된 URL 문자열로 변환
-                } catch (urlError) {
-                    throw new Error('올바른 URL 형식이 아닙니다.');
+                // URL이 있는 경우에만 형식 검증 (미등록/빈 URL은 검증 생략)
+                const urlRaw = data.url != null ? String(data.url).trim() : '';
+                let validUrl = urlRaw;
+                if (urlRaw) {
+                    try {
+                        const urlObject = new URL(urlRaw.startsWith('http') ? urlRaw : `https://${urlRaw}`);
+                        validUrl = urlObject.toString();
+                    } catch (urlError) {
+                        throw new Error('올바른 URL 형식이 아닙니다.');
+                    }
                 }
 
                 // 데이터 정제
                 const bookmarkData = {
                     title: data.title.trim(),
-                    url: validUrl,  // 검증된 URL 문자열
+                    url: validUrl,
                     source_name: data.source_name?.trim() || '',
                     summary: data.summary?.trim() || '',
                     tags: Array.isArray(data.tags) ? data.tags : 
@@ -267,8 +284,10 @@ const api = {
             }
         },
 
-        share: async (bookmarkId, target) => {
-            const response = await axiosInstance.post(`/bookmarks/${bookmarkId}/share`, { target });
+        share: async (bookmarkId, target, publicValue = undefined) => {
+            const body = { target };
+            if (target === 'users' && publicValue !== undefined) body.public = publicValue;
+            const response = await axiosInstance.post(`/bookmarks/${bookmarkId}/share`, body);
             return response.data;
         },
     },

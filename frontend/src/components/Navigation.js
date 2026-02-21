@@ -11,44 +11,49 @@ const Navigation = () => {
     const handleLogout = () => {
         logout().then(() => {
             try { logger.info('로그아웃 성공'); } catch (e) { /* 로그 실패해도 무시 */ }
-            navigate('/login');
+            navigate('/main');
         }).catch(() => {
-            navigate('/login');
+            navigate('/main');
         });
     };
 
-    // 로그인 전: 최소 헤더(로고 + 로그인 링크) 표시 → 흰 화면 방지
+    // 상단 바: 짙은 회색
+    const navClassName = 'text-white p-4 bg-gray-800';
+
+    // 로그인 전: 좌측 Link Digest, 우측 로그인 버튼
     if (!user) {
+        const showLoginForm = () => navigate('/login?form=1');
         return (
-            <nav className="bg-gray-800 text-white p-4">
+            <nav className={navClassName}>
                 <div className="container mx-auto flex justify-between items-center">
-                    <Link to="/login" className="text-xl font-bold">
-                        LinkDigest
+                    <Link to="/main" className="flex items-center gap-2 text-xl font-bold">
+                        <img src="/favicon.svg" alt="" className="w-8 h-8 flex-shrink-0" />
+                        Link Digest
                     </Link>
-                    {location.pathname !== '/login' && (
-                        <Link
-                            to="/login"
-                            className="text-sm font-medium text-blue-300 hover:text-white"
-                        >
-                            로그인
-                        </Link>
-                    )}
+                    <button
+                        type="button"
+                        onClick={showLoginForm}
+                        className="text-sm font-medium text-blue-300 hover:text-white px-3 py-1.5 rounded"
+                    >
+                        로그인
+                    </button>
                 </div>
             </nav>
         );
     }
 
     return (
-        <nav className="bg-gray-800 text-white p-4">
+        <nav className={navClassName}>
             <div className="container mx-auto flex justify-between items-center">
-                <Link to="/" className="text-xl font-bold">
-                    LinkDigest
+                <Link to="/" className="flex items-center gap-2 text-xl font-bold">
+                    <img src="/favicon.svg" alt="" className="w-8 h-8 flex-shrink-0" />
+                    Link Digest
                 </Link>
                 <div className="flex items-center space-x-4">
                     <span>{user.username}</span>
                     <button
                         onClick={handleLogout}
-                        className="p-1.5 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
+                        className="p-1.5 text-gray-300 hover:text-white rounded-full hover:bg-white/10"
                         title="로그아웃"
                     >
                         <svg 
